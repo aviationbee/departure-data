@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@layer base {
+  body, html {
+    font-family: 'Bookman Old Style', 'Georgia', serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-color: #0f172a;
+    color: #1f2937;
+  }
+
+  input, textarea, select, button {
+    font-family: 'Bookman Old Style', 'Georgia', serif;
+  }
+
+  ::placeholder {
+    font-family: 'Bookman Old Style', 'Georgia', serif;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+}
+
+/* Modern Airport Apron & Aviation Background */
+.aviation-modern-bg {
+  background-image: 
+    linear-gradient(135deg, rgba(10, 17, 40, 0.82) 0%, rgba(15, 23, 42, 0.88) 50%, rgba(2, 6, 23, 0.92) 100%),
+    url('https://images.unsplash.com/photo-1542296332-2e4473faf563?auto=format&fit=crop&w=2000&q=80');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.aviation-light-bg {
+  background-image: 
+    linear-gradient(rgba(248, 250, 252, 0.94), rgba(241, 245, 249, 0.96)),
+    url('https://images.unsplash.com/photo-1520437358207-323b43b50729?auto=format&fit=crop&w=2000&q=80');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+/* Print styling */
+@media print {
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .no-print, nav, header, button, .page-navigation {
+    display: none !important;
+  }
+
+  /* When printing left message */
+  body.print-message-active #left-report-printable {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 10mm;
+    visibility: visible !important;
+  }
+
+  body.print-message-active *:not(#left-report-printable, #left-report-printable *) {
+    display: none !important;
+  }
+
+  /* When printing right report */
+  body.print-right-active #right-report-printable {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 10mm;
+    visibility: visible !important;
+  }
+
+  body.print-right-active *:not(#right-report-printable, #right-report-printable *) {
+    display: none !important;
+  }
+}

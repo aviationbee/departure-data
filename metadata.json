@@ -1,0 +1,6 @@
+{
+  "name": "US-Bangla Station Departure Report",
+  "description": "Station Departure Report and LDM Message generator for US-Bangla Airlines (DAC Station).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

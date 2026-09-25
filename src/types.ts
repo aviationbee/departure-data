@@ -1,0 +1,80 @@
+export interface UserInfo {
+  userName: string;
+  usbaId: string;
+  stationName: string;
+}
+
+export interface FlightFormData {
+  date: string;
+  flightNoSuffix: string;
+  route: string;
+  acRegSuffix: string;
+  acType: string;
+  captain: string;
+  configure: string;
+  std: string;
+  doorClosed: string;
+  chocksOff: string;
+  airborne: string;
+  departureStatus: string;
+  delayReason?: string;
+  flightLoad: string;
+  fuelUplift: string;
+  paxMale: string;
+  paxFemale: string;
+  paxChild: string;
+  paxInfant: string;
+  paxTotal: string;
+  baggageWeight: string;
+  baggagePcs: string;
+  baggageComNo?: string;
+  cargoWeight: string;
+  cargoPcs: string;
+  cargoComNo?: string;
+  crewBagWeight?: string;
+  crewBagPcs?: string;
+  crewBagComNo?: string;
+  mail: string;
+  counterNoshow: string;
+  gateNoShow: string;
+  selfOffload: string;
+  refused?: string;
+  immigrationOff?: string;
+  immigrationNotFace?: string;
+  customOff?: string;
+  vip: string;
+  cip: string;
+  maas: string;
+  umPax: string;
+  fireArms: string;
+  wchrFig: string;
+  wchrSeat: string;
+  wchcFig: string;
+  wchcSeat: string;
+  checkInStuff?: string;
+  loadingStuff: string;
+  loadController: string;
+  paxHandling: string;
+  remarks: string;
+  dist?: {
+    b1?: string;
+    b2?: string;
+    b3?: string;
+    b4?: string;
+    a1?: string;
+    a2?: string;
+    a3?: string;
+    a4?: string;
+    a5?: string;
+    atrFwr?: string;
+    atrFwl?: string;
+    atrAft?: string;
+  };
+}
+
+export type PageMode =
+  | 'identification'
+  | 'welcome'
+  | 'data-intl'
+  | 'data-dom'
+  | 'dual-report';
