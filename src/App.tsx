@@ -100,10 +100,13 @@ const INITIAL_FORM_DATA: FlightFormData = {
   wchrSeat: '',
   wchcFig: '',
   wchcSeat: '',
+  checkInStaff: '',
   checkInStuff: '',
+  rampOfficer: '',
   loadingStuff: '',
   loadController: '',
   paxHandling: '',
+  noshowPnr: '',
   remarks: '',
 };
 
@@ -146,21 +149,83 @@ const TypewriterText: React.FC<{ text: string }> = ({ text }) => {
 };
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<PageMode>('identification');
-  const [lastDataPage, setLastDataPage] = useState<PageMode>('data-intl');
-  const [reportType, setReportType] = useState<'intl' | 'dom'>('intl');
-
-  const [userInfo, setUserInfo] = useState<UserInfo>({
-    userName: '',
-    usbaId: '',
-    stationName: 'DAC',
+  const [currentPage, setCurrentPage] = useState<PageMode>(() => {
+    const saved = localStorage.getItem('usba_current_page');
+    return (saved as PageMode) || 'identification';
+  });
+  const [lastDataPage, setLastDataPage] = useState<PageMode>(() => {
+    const saved = localStorage.getItem('usba_last_data_page');
+    return (saved as PageMode) || 'data-intl';
+  });
+  const [reportType, setReportType] = useState<'intl' | 'dom'>(() => {
+    const saved = localStorage.getItem('usba_report_type');
+    return (saved as 'intl' | 'dom') || 'intl';
   });
 
-  const [formData, setFormData] = useState<FlightFormData>(INITIAL_FORM_DATA);
+  const [userInfo, setUserInfo] = useState<UserInfo>(() => {
+    const saved = localStorage.getItem('usba_user_info');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      userName: '',
+      usbaId: '',
+      stationName: 'DAC',
+    };
+  });
+
+  const [formData, setFormData] = useState<FlightFormData>(() => {
+    const saved = localStorage.getItem('usba_flight_form_data');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return INITIAL_FORM_DATA;
+  });
+
   const [showDelayBox, setShowDelayBox] = useState(false);
   const [delayWarningModal, setDelayWarningModal] = useState(false);
+  const [showNewReportModal, setShowNewReportModal] = useState(false);
   const delayReasonInputRef = React.useRef<HTMLInputElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Sync state to LocalStorage
+  useEffect(() => {
+    localStorage.setItem('usba_current_page', currentPage);
+  }, [currentPage]);
+
+  useEffect(() => {
+    localStorage.setItem('usba_last_data_page', lastDataPage);
+  }, [lastDataPage]);
+
+  useEffect(() => {
+    localStorage.setItem('usba_report_type', reportType);
+  }, [reportType]);
+
+  useEffect(() => {
+    localStorage.setItem('usba_user_info', JSON.stringify(userInfo));
+  }, [userInfo]);
+
+  useEffect(() => {
+    localStorage.setItem('usba_flight_form_data', JSON.stringify(formData));
+  }, [formData]);
+
+  const handleLogout = () => {
+    if (window.confirm('ARE YOU SURE TO LOG OUT? ALL STORED DATA WILL BE CLEARED.')) {
+      localStorage.removeItem('usba_user_info');
+      localStorage.removeItem('usba_flight_form_data');
+      localStorage.removeItem('usba_current_page');
+      localStorage.removeItem('usba_last_data_page');
+      localStorage.removeItem('usba_report_type');
+      setUserInfo({ userName: '', usbaId: '', stationName: 'DAC' });
+      setFormData(INITIAL_FORM_DATA);
+      setCurrentPage('identification');
+      showToast('LOGGED OUT SUCCESSFULLY.');
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -1101,10 +1166,10 @@ export default function App() {
                 />
               </div>
 
-              {/* NEW BOX: FIRE ARMS (AFTER UM PAX) */}
+              {/* FIRE ARMS */}
               <div className="flex flex-col">
-                <label className="font-bold text-amber-300 mb-1 tracking-wider">
-                  FIRE ARMS (NEW)
+                <label className="font-bold text-amber-300 mb-1 tracking-wider uppercase">
+                  FIRE ARMS
                 </label>
                 <input
                   type="text"
@@ -1117,7 +1182,7 @@ export default function App() {
 
               {/* WCHR & WCHC */}
               <div className="flex flex-col md:col-span-2">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">
+                <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">
                   WHEELCHAIR (WCHR / WCHC)
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1157,36 +1222,42 @@ export default function App() {
                 </div>
               </div>
 
-              {/* CHECK-IN STUFF */}
+              {/* CHECK IN STAFF */}
               <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">Check-In STUFF</label>
+                <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">CHECK IN STAFF</label>
                 <input
                   type="text"
-                  placeholder="Check-In STUFF"
-                  value={formData.checkInStuff || ''}
-                  onChange={(e) => setFormData({ ...formData, checkInStuff: e.target.value.toUpperCase() })}
+                  placeholder="ENTER CHECK IN STAFF"
+                  value={formData.checkInStaff || formData.checkInStuff || ''}
+                  onChange={(e) => {
+                    const upper = e.target.value.toUpperCase();
+                    setFormData({ ...formData, checkInStaff: upper, checkInStuff: upper });
+                  }}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                 />
               </div>
 
-              {/* LOADING STUFF / G7 (RAMP OFFICER) */}
+              {/* RAMP OFFICER */}
               <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">Loading STUFF / G7</label>
+                <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">RAMP OFFICER</label>
                 <input
                   type="text"
-                  placeholder="Loading STUFF / G7"
-                  value={formData.loadingStuff}
-                  onChange={(e) => setFormData({ ...formData, loadingStuff: e.target.value.toUpperCase() })}
+                  placeholder="ENTER RAMP OFFICER"
+                  value={formData.rampOfficer || formData.loadingStuff || ''}
+                  onChange={(e) => {
+                    const upper = e.target.value.toUpperCase();
+                    setFormData({ ...formData, rampOfficer: upper, loadingStuff: upper });
+                  }}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                 />
               </div>
 
               {/* LOAD CONTROLLER */}
               <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">LOAD CONTROLLER</label>
+                <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">LOAD CONTROLLER</label>
                 <input
                   type="text"
-                  placeholder="LOAD CONTROLLER"
+                  placeholder="ENTER LOAD CONTROLLER"
                   value={formData.loadController}
                   onChange={(e) => setFormData({ ...formData, loadController: e.target.value.toUpperCase() })}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
@@ -1195,22 +1266,34 @@ export default function App() {
 
               {/* PAX HANDLING */}
               <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">Pax Handling</label>
+                <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">PAX HANDLING</label>
                 <input
                   type="text"
-                  placeholder="Pax Handling"
+                  placeholder="NORMAL / REMARKS"
                   value={formData.paxHandling}
                   onChange={(e) => setFormData({ ...formData, paxHandling: e.target.value.toUpperCase() })}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                 />
               </div>
 
+              {/* NOSHOW PNR (AFTER PAX HANDLING) */}
+              <div className="flex flex-col">
+                <label className="font-bold text-amber-300 mb-1 tracking-wider uppercase">NOSHOW PNR</label>
+                <input
+                  type="text"
+                  placeholder="ENTER NOSHOW PNR (E.G. 023AJD, P8L2M1)"
+                  value={formData.noshowPnr || ''}
+                  onChange={(e) => setFormData({ ...formData, noshowPnr: e.target.value.toUpperCase() })}
+                  className="p-2.5 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase font-bold"
+                />
+              </div>
+
               {/* REMARKS */}
               <div className="flex flex-col md:col-span-full">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">REMARKS</label>
+                <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">REMARKS</label>
                 <textarea
                   rows={2}
-                  placeholder="INPUT ANY NOSHOW PNR(S) OR OTHER REMARKS HERE."
+                  placeholder="ENTER OPERATIONAL REMARKS (E.G. GOT DELAY DUE TO ATC CLEARANCE)"
                   value={formData.remarks}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value.toUpperCase() })}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
@@ -1283,14 +1366,19 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => {
-                  resetForm();
-                  setCurrentPage(lastDataPage);
-                }}
-                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                onClick={() => setShowNewReportModal(true)}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>NEW REPORT</span>
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>LOG OUT</span>
               </button>
             </div>
           </div>
@@ -1367,6 +1455,49 @@ export default function App() {
             >
               OK, I WILL FILL UP NOW
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for NEW REPORT */}
+      {showNewReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-amber-400 flex items-center justify-center mx-auto mb-4 animate-pulse">
+              <RotateCcw className="w-9 h-9" />
+            </div>
+            <h3 className="text-xl font-black text-amber-400 uppercase tracking-widest mb-2">
+              CONFIRM NEW REPORT
+            </h3>
+            <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 my-4">
+              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
+                ARE YOU SURE TO CREATE NEW REPORT?
+              </p>
+            </div>
+            <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
+              A fresh flight departure data entry page will be opened.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewReportModal(false);
+                  resetForm();
+                  setCurrentPage(lastDataPage);
+                  showToast('NEW REPORT READY FOR ENTRY.');
+                }}
+                className="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-black tracking-widest text-sm uppercase shadow-lg cursor-pointer transition-all active:scale-95"
+              >
+                YES
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowNewReportModal(false)}
+                className="flex-1 py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 font-black tracking-widest text-sm uppercase shadow-lg cursor-pointer transition-all active:scale-95"
+              >
+                NO
+              </button>
+            </div>
           </div>
         </div>
       )}

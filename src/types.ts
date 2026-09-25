@@ -51,10 +51,13 @@ export interface FlightFormData {
   wchrSeat: string;
   wchcFig: string;
   wchcSeat: string;
+  checkInStaff?: string;
   checkInStuff?: string;
-  loadingStuff: string;
+  rampOfficer?: string;
+  loadingStuff?: string;
   loadController: string;
   paxHandling: string;
+  noshowPnr?: string;
   remarks: string;
   dist?: {
     b1?: string;

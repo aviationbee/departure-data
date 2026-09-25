@@ -102,12 +102,17 @@ ${specialHandlingSection}
 
 DUTY PERSONNEL:
 --------------------------------------
-LOADING STUFF / G7: ${data.loadingStuff || 'N/A'}
-LOAD CONTROLLER: ${data.loadController || 'N/A'}
+RAMP OFFICER: ${(data.rampOfficer || data.loadingStuff || 'N/A').toUpperCase()}
+CHECK IN STAFF: ${(data.checkInStaff || data.checkInStuff || 'N/A').toUpperCase()}
+LOAD CONTROLLER: ${(data.loadController || 'N/A').toUpperCase()}
+
+NOSHOW PNR:
+--------------------------------------
+${(data.noshowPnr || 'NIL').toUpperCase()}
 
 REMARKS:
 --------------------------------------
-${data.remarks || 'NIL'}
+${(data.remarks || 'NIL').toUpperCase()}
 
 --------------------------------------
 PREPARED BY:

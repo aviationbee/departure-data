@@ -37,11 +37,11 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const routeParts = (data.route || '').split('-');
   const originCode = (routeParts[0] || user.stationName || 'DAC').toUpperCase();
   const destCode = (routeParts[1] || 'DAC').toUpperCase();
-  const originCity = AIRPORT_NAMES[originCode] || originCode;
-  const destCity = AIRPORT_NAMES[destCode] || destCode;
+  const originCity = (AIRPORT_NAMES[originCode] || originCode).toUpperCase();
+  const destCity = (AIRPORT_NAMES[destCode] || destCode).toUpperCase();
 
-  const flightNumber = `BS-${data.flightNoSuffix || 'XXX'}`;
-  const displayDate = data.date ? formatDate(data.date, 'CARD') : 'N/A';
+  const flightNumber = `BS-${data.flightNoSuffix || 'XXX'}`.toUpperCase();
+  const displayDate = data.date ? formatDate(data.date, 'CARD').toUpperCase() : 'N/A';
   const regDetails = getRegistrationDetails(data.acRegSuffix);
 
   // Passengers
@@ -69,7 +69,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const formatFig = (val: string, seat?: string) => {
     const num = parseInt(val, 10);
     if (!isNaN(num) && num > 0) {
-      return seat ? `${String(num).padStart(2, '0')} (${seat})` : String(num).padStart(2, '0');
+      return seat ? `${String(num).padStart(2, '0')} (${seat.toUpperCase()})` : String(num).padStart(2, '0');
     }
     return 'NIL';
   };
@@ -81,12 +81,17 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const wchcDisplay = formatFig(data.wchcFig, data.wchcSeat);
   const fireArmsDisplay = data.fireArms && data.fireArms.trim() ? data.fireArms.toUpperCase() : 'NIL';
 
+  // Staff Values
+  const checkInStaffValue = (data.checkInStaff || data.checkInStuff || 'N/A').toUpperCase();
+  const rampOfficerValue = (data.rampOfficer || data.loadingStuff || 'N/A').toUpperCase();
+  const loadControllerValue = (data.loadController || 'N/A').toUpperCase();
+
   // Clean Time Formatter (HHMM without colons if 4 chars)
   const formatTime4 = (timeStr: string) => {
     if (!timeStr) return '----';
     const clean = timeStr.replace(/\D/g, '');
     if (clean.length === 4) return clean;
-    return timeStr;
+    return timeStr.toUpperCase();
   };
 
   // Departure Status Styling
@@ -94,8 +99,11 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const isDelayed = statusUpper.includes('DELAY');
   const isEarly = statusUpper.includes('EARLY');
 
-  // Check if Remarks Exist
-  const hasRemarks = data.remarks && data.remarks.trim() !== '' && data.remarks.trim().toUpperCase() !== 'NIL';
+  // Check if Remarks or NOSHOW PNR Exist
+  const hasRemarksContent = Boolean(
+    (data.remarks && data.remarks.trim() !== '' && data.remarks.trim().toUpperCase() !== 'NIL') ||
+    (data.noshowPnr && data.noshowPnr.trim() !== '')
+  );
 
   // Download HD JPG Handler
   const handleDownloadJpg = async () => {
@@ -113,14 +121,14 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
       link.click();
     } catch (err) {
       console.error('Failed to generate image', err);
-      alert('Could not download image. Please try again.');
+      alert('COULD NOT DOWNLOAD IMAGE. PLEASE TRY AGAIN.');
     } finally {
       setDownloading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center w-full">
+    <div className="flex flex-col items-center w-full uppercase">
       {/* Action Bar */}
       <div className="no-print w-full flex justify-between items-center mb-3">
         <span className="text-xs font-sans font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -131,7 +139,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
         <button
           onClick={handleDownloadJpg}
           disabled={downloading}
-          className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-sans text-xs font-bold shadow-lg hover:shadow-sky-500/30 flex items-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+          className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-sans text-xs font-black shadow-lg hover:shadow-sky-500/30 flex items-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50 uppercase"
         >
           <Download className="w-4 h-4" />
           <span>{downloading ? 'GENERATING HD JPG...' : 'DOWNLOAD HD JPG'}</span>
@@ -139,10 +147,10 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
       </div>
 
       {/* The Printable / Renderable Photo Card */}
-      <div className="w-full overflow-x-auto pb-2 flex justify-center">
+      <div className="w-full overflow-x-auto pb-2 flex justify-center uppercase">
         <div
           ref={cardRef}
-          className="w-[1020px] min-w-[1020px] bg-slate-100 rounded-3xl p-6 shadow-2xl border border-slate-300 font-sans text-slate-900 select-none relative overflow-hidden"
+          className="w-[1020px] min-w-[1020px] bg-slate-100 rounded-3xl p-6 shadow-2xl border border-slate-300 font-sans text-slate-900 select-none relative overflow-hidden uppercase"
           style={{
             fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)',
@@ -156,7 +164,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                 <span>US BANGLA AIRLINES</span>
               </h2>
               <span className="text-[11px] font-bold tracking-widest text-sky-200 uppercase">
-                Fly Fast &bull; Fly Safe
+                FLY FAST &bull; FLY SAFE
               </span>
             </div>
 
@@ -180,7 +188,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
           </div>
 
           {/* ROW 1: 5 INFO PILLS */}
-          <div className="grid grid-cols-5 gap-3 mt-4">
+          <div className="grid grid-cols-5 gap-3 mt-4 uppercase">
             {/* Flight No */}
             <div className="bg-white rounded-2xl p-3 border border-slate-300 shadow-sm flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow">
@@ -190,7 +198,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                 <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
                   FLIGHT NO.
                 </span>
-                <span className="text-lg font-black text-slate-900 tracking-tight">
+                <span className="text-lg font-black text-slate-900 tracking-tight uppercase">
                   {flightNumber}
                 </span>
               </div>
@@ -205,10 +213,10 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                 <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
                   FROM / TO
                 </span>
-                <span className="text-base font-black text-slate-900 tracking-tight">
+                <span className="text-base font-black text-slate-900 tracking-tight uppercase">
                   {originCode} &rarr; {destCode}
                 </span>
-                <span className="text-[9px] font-bold text-slate-600 truncate max-w-[110px]">
+                <span className="text-[9px] font-bold text-slate-600 truncate max-w-[110px] uppercase">
                   {originCity} &rarr; {destCity}
                 </span>
               </div>
@@ -239,7 +247,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   CAPTAIN
                 </span>
                 <span className="text-sm font-black text-slate-900 uppercase truncate max-w-[105px]">
-                  {data.captain || 'N/A'}
+                  {(data.captain || 'N/A').toUpperCase()}
                 </span>
               </div>
             </div>
@@ -254,14 +262,14 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   CREW COUNT
                 </span>
                 <span className="text-base font-black text-slate-900 uppercase">
-                  {data.configure || '2/5'}
+                  {(data.configure || '2/5').toUpperCase()}
                 </span>
               </div>
             </div>
           </div>
 
           {/* ROW 2: TIMINGS BAR */}
-          <div className="bg-white rounded-2xl p-3.5 mt-3 border border-slate-300 shadow-sm flex justify-between items-center px-6">
+          <div className="bg-white rounded-2xl p-3.5 mt-3 border border-slate-300 shadow-sm flex justify-between items-center px-6 uppercase">
             <div className="flex items-center gap-8">
               <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow">
                 <Clock className="w-5 h-5" />
@@ -302,7 +310,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
 
             {/* Status Badge */}
             <div
-              className={`px-5 py-2.5 rounded-xl border flex items-center gap-2.5 font-black text-xs md:text-sm tracking-wide shadow-sm ${
+              className={`px-5 py-2.5 rounded-xl border flex items-center gap-2.5 font-black text-xs md:text-sm tracking-wide shadow-sm uppercase ${
                 isDelayed
                   ? 'bg-amber-100/90 text-amber-950 border-amber-400 font-extrabold'
                   : isEarly
@@ -321,7 +329,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
           </div>
 
           {/* ROW 3: THREE FLIGHT DATA BOXES (LOAD SUMMARY, SPECIAL HANDLING, STAFF DETAILS) - HIGHLIGHTED & BOLD */}
-          <div className="grid grid-cols-3 gap-4 mt-3">
+          <div className="grid grid-cols-3 gap-4 mt-3 uppercase">
             {/* BOX 1: LOAD SUMMARY */}
             <div className="bg-white rounded-2xl border-2 border-cyan-700/30 shadow-md overflow-hidden flex flex-col">
               <div className="bg-gradient-to-r from-[#085f75] to-[#0e7490] text-white px-4 py-2.5 flex items-center gap-2 font-black text-xs md:text-[13px] uppercase tracking-wider shadow-sm">
@@ -441,47 +449,56 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                 <div className="flex justify-between items-center border-b border-slate-200 pb-2">
                   <span className="text-slate-700 font-extrabold">LOAD CONTROL</span>
                   <span className="font-black text-slate-950 uppercase text-sm">
-                    {data.loadController || 'N/A'}
+                    {loadControllerValue}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-2">
                   <span className="text-slate-700 font-extrabold">RAMP OFFICER</span>
                   <span className="font-black text-slate-950 uppercase text-sm">
-                    {data.loadingStuff || 'N/A'}
+                    {rampOfficerValue}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                  <span className="text-slate-700 font-extrabold">COUNTER</span>
+                  <span className="text-slate-700 font-extrabold">CHECK IN STAFF</span>
                   <span className="font-black text-slate-950 uppercase truncate max-w-[145px] text-sm">
-                    {data.checkInStuff || 'N/A'}
+                    {checkInStaffValue}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center pt-0.5">
                   <span className="text-slate-700 font-extrabold">REPORT BY</span>
                   <span className="font-black text-indigo-800 uppercase text-sm">
-                    {user.userName || 'N/A'}
+                    {(user.userName || 'N/A').toUpperCase()}
                   </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* NEW DEDICATED REMARKS BOX (IF HAVE REMARK IN DATA ENTRY PAGE) */}
-          {hasRemarks && (
-            <div className="mt-3 bg-gradient-to-r from-amber-50 to-amber-100/90 border-2 border-amber-400 rounded-2xl p-3 shadow-md flex items-start gap-3">
+          {/* DEDICATED REMARKS BOX WITH NOSHOW PNR (SHOWN AFTER REMARKS) */}
+          {hasRemarksContent && (
+            <div className="mt-3 bg-gradient-to-r from-amber-50 to-amber-100/90 border-2 border-amber-400 rounded-2xl p-3.5 shadow-md flex items-start gap-3 uppercase">
               <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                 <MessageSquare className="w-4 h-4 font-black" />
               </div>
-              <div className="flex-1">
-                <span className="font-black text-amber-900 uppercase text-xs tracking-wider block mb-0.5">
+              <div className="flex-1 space-y-1">
+                <span className="font-black text-amber-950 uppercase text-xs tracking-wider block">
                   REMARKS:
                 </span>
-                <p className="font-extrabold text-slate-900 text-xs md:text-sm tracking-wide leading-snug uppercase m-0">
-                  {data.remarks}
-                </p>
+                {data.remarks && data.remarks.trim() && (
+                  <p className="font-black text-slate-950 text-xs md:text-sm tracking-wide leading-snug uppercase m-0">
+                    {data.remarks.toUpperCase()}
+                  </p>
+                )}
+                {data.noshowPnr && data.noshowPnr.trim() && (
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-lg bg-red-100 border border-red-300 font-black text-red-900 text-xs tracking-wider">
+                      NOSHOW PNR: {data.noshowPnr.trim().toUpperCase()}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
