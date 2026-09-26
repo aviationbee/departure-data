@@ -623,16 +623,43 @@ export default function App() {
         <div className="flex-1 p-4 md:p-8 min-h-screen flex flex-col items-center">
           <div className="max-w-5xl w-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 shadow-2xl rounded-2xl p-5 md:p-8 my-auto text-slate-200">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-center pb-4 mb-6 border-b border-slate-800 gap-3">
-              <div>
+            <div className="flex flex-col sm:flex-row justify-between items-center pb-5 mb-6 border-b border-slate-800 gap-4">
+              <div className="flex flex-col items-center sm:items-start">
                 <h1 className="text-xl md:text-2xl font-bold tracking-wider text-amber-400 uppercase">
                   {currentPage === 'data-intl'
                     ? 'ENTER FLIGHT DATA (INTERNATIONAL)'
                     : 'ENTER FLIGHT DATA (DOMESTIC)'}
                 </h1>
-                <p className="text-xs text-slate-400 mt-1 font-sans">
-                  USER: <span className="font-bold text-white">{userInfo.userName || 'N/A'}</span> (USBA-{userInfo.usbaId}) | STATION: <span className="font-bold text-amber-300">{userInfo.stationName}</span>
-                </p>
+
+                {/* Typewriter Animated Subtitle */}
+                <div className="mt-1 h-5 flex items-center">
+                  <TypewriterText text="INVENTED BY RADOAN RASEL" />
+                </div>
+
+                {/* Modern & Attractive User & Station Status Bar */}
+                <div className="mt-2.5 inline-flex flex-wrap items-center gap-2 bg-gradient-to-r from-slate-800/95 via-slate-800/80 to-slate-900/95 border border-slate-700/80 rounded-xl px-3.5 py-1.5 shadow-lg font-sans text-xs uppercase">
+                  <span className="inline-flex items-center gap-1.5 text-slate-300 font-bold">
+                    <span className="w-5 h-5 rounded-md bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400">
+                      <User className="w-3 h-3" />
+                    </span>
+                    <span className="text-slate-400 tracking-wider">USER:</span>
+                    <span className="font-black text-white tracking-wide">
+                      {userInfo.userName || 'N/A'}
+                    </span>
+                  </span>
+
+                  <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 border border-indigo-400/40 text-indigo-300 font-black tracking-wider text-[11px] flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                    <span>USBA-{userInfo.usbaId}</span>
+                  </span>
+
+                  <span className="text-slate-600 font-bold">|</span>
+
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 font-black tracking-wider">
+                    <MapPin className="w-3 h-3 text-amber-400" />
+                    <span>STATION: {userInfo.stationName}</span>
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
