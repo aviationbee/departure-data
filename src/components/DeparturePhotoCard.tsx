@@ -44,6 +44,15 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const displayDate = data.date ? formatDate(data.date, 'CARD').toUpperCase() : 'N/A';
   const regDetails = getRegistrationDetails(data.acRegSuffix);
 
+  // Helper: treat empty, whitespace, 'NIL', or '0'/'00' as empty/zero
+  const isZeroOrEmpty = (val?: string): boolean => {
+    if (!val) return true;
+    const trimmed = val.trim().toUpperCase();
+    if (trimmed === '' || trimmed === 'NIL' || trimmed === 'N/A' || trimmed === '-') return true;
+    if (/^0+$/.test(trimmed)) return true;
+    return false;
+  };
+
   // Passengers (restricted from showing actual count on photo card per management policy)
   const paxDisplay = 'AS SYSTEM';
 
@@ -58,16 +67,18 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const cargoDisplay = cgoW > 0 || cgoP > 0 ? `${cgoW} KGS ${cgoP} PCS` : 'NIL';
 
   // Mail
-  const mailDisplay = data.mail ? data.mail.toUpperCase() : 'NIL';
+  const mailDisplay = isZeroOrEmpty(data.mail) ? 'NIL' : data.mail.trim().toUpperCase();
 
   // Fuel
-  const fuelDisplay = data.fuelUplift ? `${data.fuelUplift} KG` : 'NIL';
+  const fuelNum = parseInt(data.fuelUplift, 10) || 0;
+  const fuelDisplay = !isZeroOrEmpty(data.fuelUplift) && fuelNum > 0 ? `${data.fuelUplift.trim()} KG` : 'NIL';
 
   // Special Handling
   const formatFig = (val: string, seat?: string) => {
     const num = parseInt(val, 10);
     if (!isNaN(num) && num > 0) {
-      return seat ? `${String(num).padStart(2, '0')} (${seat.toUpperCase()})` : String(num).padStart(2, '0');
+      const validSeat = seat && !isZeroOrEmpty(seat) ? seat.trim().toUpperCase() : '';
+      return validSeat ? `${String(num).padStart(2, '0')} (${validSeat})` : String(num).padStart(2, '0');
     }
     return 'NIL';
   };
@@ -77,16 +88,24 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const maasDisplay = formatFig(data.maas);
   const wchrDisplay = formatFig(data.wchrFig, data.wchrSeat);
   const wchcDisplay = formatFig(data.wchcFig, data.wchcSeat);
-  const fireArmsDisplay = data.fireArms && data.fireArms.trim() ? data.fireArms.toUpperCase() : 'NIL';
+  const fireArmsDisplay = isZeroOrEmpty(data.fireArms) ? 'NIL' : data.fireArms.trim().toUpperCase();
 
-  // Staff Values
-  const checkInStaffValue = (data.checkInStaff || data.checkInStuff || 'N/A').toUpperCase();
-  const rampOfficerValue = (data.rampOfficer || data.loadingStuff || 'N/A').toUpperCase();
-  const loadControllerValue = (data.loadController || 'N/A').toUpperCase();
+  // Staff & Captain Values
+  const captainDisplay = isZeroOrEmpty(data.captain) ? 'NIL' : data.captain.trim().toUpperCase();
+  const configureDisplay = isZeroOrEmpty(data.configure) ? 'NIL' : data.configure.trim().toUpperCase();
+  const checkInStaffValue = isZeroOrEmpty(data.checkInStaff || data.checkInStuff)
+    ? 'NIL'
+    : (data.checkInStaff || data.checkInStuff || '').trim().toUpperCase();
+  const rampOfficerValue = isZeroOrEmpty(data.rampOfficer || data.loadingStuff)
+    ? 'NIL'
+    : (data.rampOfficer || data.loadingStuff || '').trim().toUpperCase();
+  const loadControllerValue = isZeroOrEmpty(data.loadController)
+    ? 'NIL'
+    : data.loadController.trim().toUpperCase();
 
   // Clean Time Formatter (HHMM without colons if 4 chars)
   const formatTime4 = (timeStr: string) => {
-    if (!timeStr) return '----';
+    if (!timeStr || isZeroOrEmpty(timeStr)) return '----';
     const clean = timeStr.replace(/\D/g, '');
     if (clean.length === 4) return clean;
     return timeStr.toUpperCase();
@@ -97,11 +116,10 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const isDelayed = statusUpper.includes('DELAY');
   const isEarly = statusUpper.includes('EARLY');
 
-  // Check if Remarks or NOSHOW PNR Exist
-  const hasRemarksContent = Boolean(
-    (data.remarks && data.remarks.trim() !== '' && data.remarks.trim().toUpperCase() !== 'NIL') ||
-    (data.noshowPnr && data.noshowPnr.trim() !== '')
-  );
+  // Check if Remarks or NOSHOW PNR Exist (ignore '0' or 'NIL' or empty)
+  const hasValidRemarks = !isZeroOrEmpty(data.remarks);
+  const hasValidNoshowPnr = !isZeroOrEmpty(data.noshowPnr);
+  const hasRemarksContent = hasValidRemarks || hasValidNoshowPnr;
 
   // Download HD JPG Handler
   const handleDownloadJpg = async () => {
@@ -176,32 +194,27 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
               </h1>
             </div>
 
-            {/* Right: Decorative Airplane Vector */}
-            <div className="relative z-10 opacity-70">
-              <Plane className="w-14 h-14 text-white/40 rotate-45 transform translate-x-2 -translate-y-1" />
+            {/* Right: Big, Bold, Highlighted FLIGHT NO Badge for instant WhatsApp preview recognition */}
+            <div className="relative z-10 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 text-slate-950 px-5 py-2 rounded-2xl border-2 border-white shadow-xl flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-slate-950 text-amber-300 flex items-center justify-center shadow-md shrink-0">
+                <Plane className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col leading-none">
+                <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-1">
+                  FLIGHT NO.
+                </span>
+                <span className="text-3xl font-black text-slate-950 tracking-wider uppercase">
+                  {flightNumber}
+                </span>
+              </div>
             </div>
 
             {/* Subtle curved background overlay */}
             <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/10 -skew-x-12 pointer-events-none" />
           </div>
 
-          {/* ROW 1: 5 INFO PILLS */}
-          <div className="grid grid-cols-5 gap-3 mt-4 uppercase">
-            {/* Flight No */}
-            <div className="bg-white rounded-2xl p-3 border border-slate-300 shadow-sm flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow">
-                <Plane className="w-6 h-6" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
-                  FLIGHT NO.
-                </span>
-                <span className="text-lg font-black text-slate-900 tracking-tight uppercase">
-                  {flightNumber}
-                </span>
-              </div>
-            </div>
-
+          {/* ROW 1: 4 INFO PILLS */}
+          <div className="grid grid-cols-4 gap-3.5 mt-4 uppercase">
             {/* From / To */}
             <div className="bg-white rounded-2xl p-3 border border-slate-300 shadow-sm flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow">
@@ -214,7 +227,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                 <span className="text-base font-black text-slate-900 tracking-tight uppercase">
                   {originCode} &rarr; {destCode}
                 </span>
-                <span className="text-[9px] font-bold text-slate-600 truncate max-w-[110px] uppercase">
+                <span className="text-[9px] font-bold text-slate-600 truncate max-w-[140px] uppercase">
                   {originCity} &rarr; {destCity}
                 </span>
               </div>
@@ -244,8 +257,8 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                 <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
                   CAPTAIN
                 </span>
-                <span className="text-sm font-black text-slate-900 uppercase truncate max-w-[105px]">
-                  {(data.captain || 'N/A').toUpperCase()}
+                <span className="text-sm font-black text-slate-900 uppercase truncate max-w-[135px]">
+                  {captainDisplay}
                 </span>
               </div>
             </div>
@@ -260,7 +273,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   CREW COUNT
                 </span>
                 <span className="text-base font-black text-slate-900 uppercase">
-                  {(data.configure || '2/5').toUpperCase()}
+                  {configureDisplay}
                 </span>
               </div>
             </div>
@@ -485,15 +498,15 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                 <span className="font-black text-amber-950 uppercase text-xs tracking-wider block">
                   REMARKS:
                 </span>
-                {data.remarks && data.remarks.trim() && (
+                {hasValidRemarks && (
                   <p className="font-black text-slate-950 text-xs md:text-sm tracking-wide leading-snug uppercase m-0">
-                    {data.remarks.toUpperCase()}
+                    {data.remarks.trim().toUpperCase()}
                   </p>
                 )}
-                {data.noshowPnr && data.noshowPnr.trim() && (
+                {hasValidNoshowPnr && (
                   <div className="mt-1 flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-lg bg-red-100 border border-red-300 font-black text-red-900 text-xs tracking-wider">
-                      NOSHOW PNR: {data.noshowPnr.trim().toUpperCase()}
+                      NOSHOW PNR: {data.noshowPnr!.trim().toUpperCase()}
                     </span>
                   </div>
                 )}
