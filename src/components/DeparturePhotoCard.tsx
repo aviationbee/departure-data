@@ -426,40 +426,51 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl p-3.5 mt-3 border border-slate-300 shadow-sm flex justify-between items-center px-6 uppercase">
-              <div className="flex items-center gap-8">
-                <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow">
-                  <Clock className="w-5 h-5" />
+            <div className="bg-gradient-to-r from-sky-100/95 via-sky-50/95 to-blue-100/90 rounded-2xl p-3.5 mt-3 border-2 border-sky-400/70 shadow-md flex justify-between items-center px-5 uppercase">
+              <div className="flex items-center gap-3.5">
+                {/* Modern Icon + Title Badge */}
+                <div className="flex items-center gap-2.5 pr-3 border-r-2 border-sky-300/70">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-600 to-blue-700 text-white flex items-center justify-center shadow-md">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-[9px] font-extrabold text-sky-700 tracking-widest">
+                      FLIGHT TIMING
+                    </span>
+                    <span className="text-xs font-black text-sky-950 tracking-wider">
+                      DEPARTURE
+                    </span>
+                  </div>
                 </div>
 
                 {/* STD */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[11px] font-black text-slate-600 uppercase">STD</span>
-                  <span className="text-xl font-black text-slate-950 tracking-wider">
+                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-3.5 py-1.5 shadow-sm flex flex-col items-center min-w-[74px]">
+                  <span className="text-[10px] font-black text-sky-800 uppercase tracking-wider"># STD</span>
+                  <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                     {formatTime4(data.std)}
                   </span>
                 </div>
 
                 {/* D/C */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[11px] font-black text-slate-600 uppercase"># D/C</span>
-                  <span className="text-xl font-black text-slate-950 tracking-wider">
+                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-3.5 py-1.5 shadow-sm flex flex-col items-center min-w-[74px]">
+                  <span className="text-[10px] font-black text-sky-800 uppercase tracking-wider"># D/C</span>
+                  <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                     {formatTime4(data.doorClosed)}
                   </span>
                 </div>
 
                 {/* C/OFF */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[11px] font-black text-slate-600 uppercase"># C/OFF</span>
-                  <span className="text-xl font-black text-slate-950 tracking-wider">
+                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-3.5 py-1.5 shadow-sm flex flex-col items-center min-w-[74px]">
+                  <span className="text-[10px] font-black text-sky-800 uppercase tracking-wider"># C/OFF</span>
+                  <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                     {formatTime4(data.chocksOff)}
                   </span>
                 </div>
 
                 {/* A/B */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[11px] font-black text-slate-600 uppercase"># A/B</span>
-                  <span className="text-xl font-black text-slate-950 tracking-wider">
+                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-3.5 py-1.5 shadow-sm flex flex-col items-center min-w-[74px]">
+                  <span className="text-[10px] font-black text-sky-800 uppercase tracking-wider"># A/B</span>
+                  <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                     {formatTime4(data.airborne)}
                   </span>
                 </div>
