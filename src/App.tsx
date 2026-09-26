@@ -340,16 +340,8 @@ export default function App() {
     showToast(`${label} copied to clipboard!`);
   };
 
-  const printSection = (target: 'message' | 'right') => {
-    if (target === 'message') {
-      document.body.classList.add('print-message-active');
-      window.print();
-      document.body.classList.remove('print-message-active');
-    } else {
-      document.body.classList.add('print-right-active');
-      window.print();
-      document.body.classList.remove('print-right-active');
-    }
+  const printSection = (_target: 'message' | 'right') => {
+    window.print();
   };
 
   // Demo autofill for rapid testing
@@ -1327,7 +1319,7 @@ export default function App() {
 
       {/* ================= PAGE 4: DUAL REPORT VIEW ================= */}
       {currentPage === 'dual-report' && (
-        <div className="flex-1 p-3 md:p-6 min-h-screen flex flex-col">
+        <div className="print-page-wrapper flex-1 p-3 md:p-6 min-h-screen flex flex-col">
           {/* Header Bar */}
           <div className="no-print max-w-7xl mx-auto w-full flex flex-col md:flex-row justify-between items-center mb-4 bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-700/70 shadow-xl gap-3">
             <div>
@@ -1384,11 +1376,11 @@ export default function App() {
           </div>
 
           {/* Dual Panels Layout */}
-          <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col gap-6">
+          <div className="print-dual-container max-w-7xl mx-auto w-full flex-1 flex flex-col gap-6">
             {/* Panel 1: HD PHOTO CARD (Replacing Departure Message, with JPG Download) */}
             <div
               id="left-report-printable"
-              className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/70 rounded-2xl p-5 shadow-2xl flex flex-col"
+              className="no-print bg-slate-900/80 backdrop-blur-xl border border-slate-700/70 rounded-2xl p-5 shadow-2xl flex flex-col"
             >
               <DeparturePhotoCard data={formData} user={userInfo} />
             </div>
@@ -1413,7 +1405,7 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="print-table-scroll flex-1 overflow-y-auto">
                 <DepartureReportTable
                   data={formData}
                   user={userInfo}

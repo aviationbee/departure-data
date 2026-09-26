@@ -41,48 +41,94 @@
   background-attachment: fixed;
 }
 
-/* Print styling */
+/* Print styling - Perfect Single Page A4 Official Report */
+@page {
+  size: A4 portrait;
+  margin: 10mm 12mm;
+}
+
 @media print {
-  body, html {
+  html, body, #root {
     background: #ffffff !important;
+    background-image: none !important;
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  .no-print, nav, header, button, .page-navigation {
+  /* Hide non-printable elements and Photo Card panel when printing */
+  .no-print,
+  #left-report-printable,
+  nav,
+  header,
+  button,
+  .page-navigation {
     display: none !important;
   }
 
-  /* When printing left message */
-  body.print-message-active #left-report-printable {
+  /* Reset all parent layout containers so they don't clip or add dark backgrounds */
+  .aviation-modern-bg,
+  .aviation-light-bg,
+  .print-page-wrapper,
+  .print-dual-container,
+  #right-report-printable,
+  .print-table-scroll {
+    background: transparent !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     display: block !important;
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 10mm;
-    visibility: visible !important;
   }
 
-  body.print-message-active *:not(#left-report-printable, #left-report-printable *) {
-    display: none !important;
+  /* Official A4 Table container */
+  #printable-right-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 auto !important;
+    padding: 2mm 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
-  /* When printing right report */
-  body.print-right-active #right-report-printable {
-    display: block !important;
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 10mm;
-    visibility: visible !important;
+  #printable-right-table table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    border: 1.5pt solid #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
-  body.print-right-active *:not(#right-report-printable, #right-report-printable *) {
-    display: none !important;
+  #printable-right-table tr {
+    border: 1pt solid #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #printable-right-table td {
+    padding: 5.5px 9px !important;
+    font-size: 10pt !important;
+    line-height: 1.3 !important;
+    color: #000000 !important;
   }
 }

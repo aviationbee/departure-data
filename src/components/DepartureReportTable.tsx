@@ -47,104 +47,108 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
   const paxHandlingValue = (data.paxHandling || 'N/A').toUpperCase();
 
   return (
-    <div className="w-full flex justify-center py-2 uppercase">
+    <div className="w-full flex justify-center py-2 print:py-0 uppercase">
       {/* Actual A4 Sized Container Preview (210mm x 297mm proportions) */}
       <div
         id="printable-right-table"
-        className="w-full max-w-[210mm] min-h-[297mm] bg-white text-black p-8 md:p-10 font-serif border border-neutral-300 rounded shadow-2xl relative uppercase"
+        className="w-full max-w-[210mm] min-h-[297mm] print:min-h-0 bg-white text-black p-8 md:p-10 print:p-0 font-serif border border-neutral-300 print:border-0 rounded shadow-2xl print:shadow-none relative uppercase"
         style={{
           fontFamily: "'Bookman Old Style', 'Times New Roman', serif",
           boxSizing: 'border-box',
         }}
       >
         {/* Header */}
-        <div className="text-center mb-6">
-          <h2 className="text-3xl font-extrabold tracking-widest m-0 uppercase">US-BANGLA AIRLINES</h2>
-          <h3 className="text-lg font-bold border-b-2 border-black pb-1.5 mt-1 tracking-wider uppercase">
+        <div className="text-center mb-5 print:mb-4">
+          <h2 className="text-3xl print:text-2xl font-extrabold tracking-widest m-0 uppercase text-black">
+            US-BANGLA AIRLINES
+          </h2>
+          <h3 className="text-lg print:text-base font-bold border-b-2 border-black pb-1.5 mt-1 tracking-wider uppercase text-black">
             FLIGHT DEPARTURE REPORT
           </h3>
         </div>
 
         {/* Departure Table */}
-        <table className="w-full border-2 border-black border-collapse text-[10.5pt]">
+        <table className="w-full border-2 border-black border-collapse text-[10.5pt] print:text-[10pt] text-black">
           <tbody>
             <tr className="border border-black">
-              <td className="font-bold p-2 w-[35%] align-top">1. FLIGHT NO</td>
+              <td className="font-bold p-2 w-[35%] align-top border-r border-black">1. FLIGHT NO</td>
               <td className="p-2">: {flightNo} ({data.route || 'N/A'})</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">2. DATE</td>
+              <td className="font-bold p-2 align-top border-r border-black">2. DATE</td>
               <td className="p-2">: {formattedDate}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">3. DEPARTURE TIME</td>
+              <td className="font-bold p-2 align-top border-r border-black">3. DEPARTURE TIME</td>
               <td className="p-2 leading-relaxed">
                 : STD: {data.std || 'N/A'} LT &nbsp; D/C: {data.doorClosed || 'N/A'} LT &nbsp; ATD: {data.chocksOff || 'N/A'} LT &nbsp; A/B: {data.airborne || 'N/A'} LT
-                <div className="text-sm font-bold mt-1 text-black uppercase">: STATUS: {(data.departureStatus || 'ON TIME').toUpperCase()}</div>
+                <div className="text-sm print:text-[10pt] font-bold mt-0.5 text-black uppercase">
+                  : STATUS: {(data.departureStatus || 'ON TIME').toUpperCase()}
+                </div>
               </td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">4. A/C REGISTRATION</td>
+              <td className="font-bold p-2 align-top border-r border-black">4. A/C REGISTRATION</td>
               <td className="p-2">: {regDetails.display} ({(data.acType || 'N/A').toUpperCase()})</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">5. CAPTAIN</td>
+              <td className="font-bold p-2 align-top border-r border-black">5. CAPTAIN</td>
               <td className="p-2">: CAPT. {(data.captain || 'N/A').toUpperCase()} ({(data.configure || 'N/A').toUpperCase()})</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">6. ORIGIN</td>
+              <td className="font-bold p-2 align-top border-r border-black">6. ORIGIN</td>
               <td className="p-2">: {origin}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">7. DESTINATION</td>
+              <td className="font-bold p-2 align-top border-r border-black">7. DESTINATION</td>
               <td className="p-2">: {destination}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">8. TOTAL PAX</td>
+              <td className="font-bold p-2 align-top border-r border-black">8. TOTAL PAX</td>
               <td className="p-2">: {passengerString}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">9. TOTAL BAG/MAIL/CGO</td>
+              <td className="font-bold p-2 align-top border-r border-black">9. TOTAL BAG/MAIL/CGO</td>
               <td className="p-2">: {bagMailCgoString}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">10. CHECK IN STAFF</td>
+              <td className="font-bold p-2 align-top border-r border-black">10. CHECK IN STAFF</td>
               <td className="p-2">: {checkInStaffValue}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">11. RAMP OFFICER</td>
+              <td className="font-bold p-2 align-top border-r border-black">11. RAMP OFFICER</td>
               <td className="p-2">: {rampOfficerValue}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">12. LOAD CONTROL</td>
+              <td className="font-bold p-2 align-top border-r border-black">12. LOAD CONTROL</td>
               <td className="p-2">: {loadControllerValue}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">13. FUEL (UPLIFT)</td>
+              <td className="font-bold p-2 align-top border-r border-black">13. FUEL (UPLIFT)</td>
               <td className="p-2">: {data.fuelUplift || '0'} KGS</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">14. PAX HANDLING</td>
+              <td className="font-bold p-2 align-top border-r border-black">14. PAX HANDLING</td>
               <td className="p-2">: {paxHandlingValue}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">15. VIP/CIP/MAAS/UM</td>
+              <td className="font-bold p-2 align-top border-r border-black">15. VIP/CIP/MAAS/UM</td>
               <td className="p-2">: {specialHandlingOutput}</td>
             </tr>
             {/* 16. FIRE ARMS */}
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">16. FIRE ARMS</td>
+              <td className="font-bold p-2 align-top border-r border-black">16. FIRE ARMS</td>
               <td className="p-2">: {fireArmsValue}</td>
             </tr>
             {/* 17. REMARKS */}
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top">17. REMARKS</td>
+              <td className="font-bold p-2 align-top border-r border-black">17. REMARKS</td>
               <td className="p-2 leading-relaxed">
                 : &bull; OFFLOAD: {offloadString}
                 <br />
                 &bull; NOSHOW: {noshowValue}
                 {data.remarks && data.remarks.trim() && (
-                  <div className="mt-1 font-semibold text-black uppercase">
+                  <div className="mt-0.5 font-semibold text-black uppercase">
                     : {data.remarks.trim().toUpperCase()}
                   </div>
                 )}
@@ -154,18 +158,18 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
         </table>
 
         {/* Footer Signatures */}
-        <table className="w-full border-2 border-black border-collapse mt-8 text-[10.5pt]">
+        <table className="w-full border-2 border-black border-collapse mt-6 print:mt-5 text-[10.5pt] print:text-[10pt] text-black">
           <tbody>
             <tr className="border border-black">
-              <td className="font-bold p-2.5 w-[35%]">PREPARED BY</td>
+              <td className="font-bold p-2.5 w-[35%] border-r border-black">PREPARED BY</td>
               <td className="p-2.5">: {user.userName.toUpperCase() || 'N/A'}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2.5">STAFF ID</td>
+              <td className="font-bold p-2.5 border-r border-black">STAFF ID</td>
               <td className="p-2.5">: USBA-{user.usbaId.toUpperCase() || 'N/A'}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2.5 h-14 align-middle">SIGNATURE</td>
+              <td className="font-bold p-2.5 h-14 print:h-12 align-middle border-r border-black">SIGNATURE</td>
               <td className="p-2.5 align-middle">:</td>
             </tr>
           </tbody>
