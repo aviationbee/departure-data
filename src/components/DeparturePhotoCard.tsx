@@ -44,10 +44,8 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const displayDate = data.date ? formatDate(data.date, 'CARD').toUpperCase() : 'N/A';
   const regDetails = getRegistrationDetails(data.acRegSuffix);
 
-  // Passengers
-  const totalPax = parseInt(data.paxTotal, 10) || 0;
-  const infantPax = parseInt(data.paxInfant, 10) || 0;
-  const paxDisplay = totalPax > 0 ? `${totalPax} + ${String(infantPax).padStart(2, '0')} INF` : 'NIL';
+  // Passengers (restricted from showing actual count on photo card per management policy)
+  const paxDisplay = 'AS SYSTEM';
 
   // Baggage
   const bagW = parseInt(data.baggageWeight, 10) || 0;
