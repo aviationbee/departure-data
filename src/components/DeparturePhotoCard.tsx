@@ -88,6 +88,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const maasDisplay = formatFig(data.maas);
   const wchrDisplay = formatFig(data.wchrFig, data.wchrSeat);
   const wchcDisplay = formatFig(data.wchcFig, data.wchcSeat);
+  const umPaxDisplay = formatFig(data.umPax);
   const fireArmsDisplay = isZeroOrEmpty(data.fireArms) ? 'NIL' : data.fireArms.trim().toUpperCase();
 
   // Staff & Captain Values
@@ -348,8 +349,8 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                 <span className="font-extrabold tracking-wide">LOAD SUMMARY</span>
               </div>
 
-              <div className="p-4 space-y-3 text-xs md:text-[12.5px] font-bold">
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+              <div className="p-4 space-y-2.5 text-xs md:text-[12.5px] font-bold">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
                     <Fuel className="w-4 h-4 text-cyan-700" />
                     FUEL
@@ -357,7 +358,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   <span className="font-black text-slate-950 text-sm tracking-tight">{fuelDisplay}</span>
                 </div>
 
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
                     <Users className="w-4 h-4 text-cyan-700" />
                     PASSENGERS
@@ -365,7 +366,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   <span className="font-black text-slate-950 text-sm tracking-tight">{paxDisplay}</span>
                 </div>
 
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
                     <Luggage className="w-4 h-4 text-cyan-700" />
                     BAGGAGE
@@ -373,7 +374,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   <span className="font-black text-slate-950 text-sm tracking-tight">{bagDisplay}</span>
                 </div>
 
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
                     <Package className="w-4 h-4 text-cyan-700" />
                     CARGO
@@ -381,12 +382,20 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   <span className="font-black text-slate-950 text-sm tracking-tight">{cargoDisplay}</span>
                 </div>
 
-                <div className="flex justify-between items-center pt-0.5">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
                     <Mail className="w-4 h-4 text-cyan-700" />
                     MAIL
                   </span>
                   <span className="font-black text-slate-950 text-sm tracking-tight">{mailDisplay}</span>
+                </div>
+
+                <div className="flex justify-between items-center pt-0.5">
+                  <span className="text-slate-700 flex items-center gap-2 font-extrabold">
+                    <Shield className="w-4 h-4 text-cyan-700" />
+                    FIRE ARMS
+                  </span>
+                  <span className="font-black text-slate-950 text-sm tracking-tight">{fireArmsDisplay}</span>
                 </div>
               </div>
             </div>
@@ -441,10 +450,10 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
 
                 <div className="flex justify-between items-center pt-0.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
-                    <Shield className="w-4 h-4 text-teal-700" />
-                    FIRE ARMS
+                    <UserCheck className="w-4 h-4 text-teal-700" />
+                    UM PAX
                   </span>
-                  <span className="font-black text-slate-950 text-sm">{fireArmsDisplay}</span>
+                  <span className="font-black text-slate-950 text-sm">{umPaxDisplay}</span>
                 </div>
               </div>
             </div>
