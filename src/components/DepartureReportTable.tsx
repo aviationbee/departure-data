@@ -46,6 +46,9 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
   const loadControllerValue = (data.loadController || 'N/A').toUpperCase();
   const paxHandlingValue = (data.paxHandling || 'N/A').toUpperCase();
 
+  const isOutstation = (user.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
+  const s = isOutstation ? 1 : 0;
+
   return (
     <div className="w-full flex justify-center py-2 print:py-0 uppercase">
       {/* Actual A4 Sized Container Preview (210mm x 297mm proportions) */}
@@ -58,7 +61,7 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
         }}
       >
         {/* Header */}
-        <div className="text-center mb-5 print:mb-4">
+        <div className="text-center mb-5 print:mb-3.5">
           <h2 className="text-3xl print:text-2xl font-extrabold tracking-widest m-0 uppercase text-black">
             US-BANGLA AIRLINES
           </h2>
@@ -68,7 +71,7 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
         </div>
 
         {/* Departure Table */}
-        <table className="w-full border-2 border-black border-collapse text-[10.5pt] print:text-[10pt] text-black">
+        <table className="w-full border-2 border-black border-collapse text-[10.5pt] print:text-[9.5pt] text-black">
           <tbody>
             <tr className="border border-black">
               <td className="font-bold p-2 w-[35%] align-top border-r border-black">1. FLIGHT NO</td>
@@ -78,71 +81,82 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
               <td className="font-bold p-2 align-top border-r border-black">2. DATE</td>
               <td className="p-2">: {formattedDate}</td>
             </tr>
+            {isOutstation && (
+              <tr className="border border-black">
+                <td className="font-bold p-2 align-top border-r border-black">3. ARRIVAL TIME</td>
+                <td className="p-2 leading-relaxed">
+                  : STA: {data.sta || 'N/A'} LT &nbsp; C/ON: {data.chocksOn || 'N/A'} LT &nbsp; DOOR OPEN: {data.doorOpen || 'N/A'} LT
+                  <div className="text-sm print:text-[9.5pt] font-bold mt-0.5 text-black uppercase">
+                    : STATUS: {(data.arrivalStatus || 'FLIGHT ON TIME ARRIVED').toUpperCase()}
+                  </div>
+                </td>
+              </tr>
+            )}
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">3. DEPARTURE TIME</td>
+              <td className="font-bold p-2 align-top border-r border-black">{3 + s}. DEPARTURE TIME</td>
               <td className="p-2 leading-relaxed">
                 : STD: {data.std || 'N/A'} LT &nbsp; D/C: {data.doorClosed || 'N/A'} LT &nbsp; ATD: {data.chocksOff || 'N/A'} LT &nbsp; A/B: {data.airborne || 'N/A'} LT
-                <div className="text-sm print:text-[10pt] font-bold mt-0.5 text-black uppercase">
+                <div className="text-sm print:text-[9.5pt] font-bold mt-0.5 text-black uppercase">
                   : STATUS: {(data.departureStatus || 'ON TIME').toUpperCase()}
                 </div>
               </td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">4. A/C REGISTRATION</td>
+              <td className="font-bold p-2 align-top border-r border-black">{4 + s}. A/C REGISTRATION</td>
               <td className="p-2">: {regDetails.display} ({(data.acType || 'N/A').toUpperCase()})</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">5. CAPTAIN</td>
+              <td className="font-bold p-2 align-top border-r border-black">{5 + s}. CAPTAIN</td>
               <td className="p-2">: CAPT. {(data.captain || 'N/A').toUpperCase()} ({(data.configure || 'N/A').toUpperCase()})</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">6. ORIGIN</td>
+              <td className="font-bold p-2 align-top border-r border-black">{6 + s}. ORIGIN</td>
               <td className="p-2">: {origin}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">7. DESTINATION</td>
+              <td className="font-bold p-2 align-top border-r border-black">{7 + s}. DESTINATION</td>
               <td className="p-2">: {destination}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">8. TOTAL PAX</td>
+              <td className="font-bold p-2 align-top border-r border-black">{8 + s}. TOTAL PAX</td>
               <td className="p-2">: {passengerString}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">9. TOTAL BAG/MAIL/CGO</td>
+              <td className="font-bold p-2 align-top border-r border-black">{9 + s}. TOTAL BAG/MAIL/CGO</td>
               <td className="p-2">: {bagMailCgoString}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">10. CHECK IN STAFF</td>
+              <td className="font-bold p-2 align-top border-r border-black">{10 + s}. CHECK IN STAFF</td>
               <td className="p-2">: {checkInStaffValue}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">11. RAMP OFFICER</td>
+              <td className="font-bold p-2 align-top border-r border-black">{11 + s}. RAMP OFFICER</td>
               <td className="p-2">: {rampOfficerValue}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">12. LOAD CONTROL</td>
+              <td className="font-bold p-2 align-top border-r border-black">{12 + s}. LOAD CONTROL</td>
               <td className="p-2">: {loadControllerValue}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">13. FUEL (UPLIFT)</td>
+              <td className="font-bold p-2 align-top border-r border-black">{13 + s}. FUEL (UPLIFT)</td>
               <td className="p-2">: {data.fuelUplift || '0'} KGS</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">14. PAX HANDLING</td>
+              <td className="font-bold p-2 align-top border-r border-black">{14 + s}. PAX HANDLING</td>
               <td className="p-2">: {paxHandlingValue}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">15. VIP/CIP/MAAS/UM</td>
+              <td className="font-bold p-2 align-top border-r border-black">{15 + s}. VIP/CIP/MAAS/UM</td>
               <td className="p-2">: {specialHandlingOutput}</td>
             </tr>
-            {/* 16. FIRE ARMS */}
+            {/* FIRE ARMS */}
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">16. FIRE ARMS</td>
+              <td className="font-bold p-2 align-top border-r border-black">{16 + s}. FIRE ARMS</td>
               <td className="p-2">: {fireArmsValue}</td>
             </tr>
-            {/* 17. REMARKS */}
+            {/* REMARKS */}
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">17. REMARKS</td>
+              <td className="font-bold p-2 align-top border-r border-black">{17 + s}. REMARKS</td>
               <td className="p-2 leading-relaxed">
                 : &bull; OFFLOAD: {offloadString}
                 <br />
@@ -158,7 +172,7 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
         </table>
 
         {/* Footer Signatures */}
-        <table className="w-full border-2 border-black border-collapse mt-6 print:mt-5 text-[10.5pt] print:text-[10pt] text-black">
+        <table className="w-full border-2 border-black border-collapse mt-6 print:mt-4 text-[10.5pt] print:text-[9.5pt] text-black">
           <tbody>
             <tr className="border border-black">
               <td className="font-bold p-2.5 w-[35%] border-r border-black">PREPARED BY</td>
@@ -169,7 +183,7 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
               <td className="p-2.5">: USBA-{user.usbaId.toUpperCase() || 'N/A'}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2.5 h-14 print:h-12 align-middle border-r border-black">SIGNATURE</td>
+              <td className="font-bold p-2.5 h-14 print:h-11 align-middle border-r border-black">SIGNATURE</td>
               <td className="p-2.5 align-middle">:</td>
             </tr>
           </tbody>

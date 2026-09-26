@@ -258,6 +258,31 @@ export function calculateDepartureStatus(
   };
 }
 
+export function calculateArrivalStatus(sta?: string, chocksOn?: string): string {
+  const staMin = parseTimeToMinutes(sta || '');
+  const onMin = parseTimeToMinutes(chocksOn || '');
+
+  if (staMin === null || onMin === null) {
+    return 'FLIGHT ON TIME ARRIVED';
+  }
+
+  let diff = onMin - staMin;
+  // Handle midnight wrap
+  if (diff < -720) diff += 1440;
+  else if (diff > 720) diff -= 1440;
+
+  if (diff === 0) {
+    return 'FLIGHT ON TIME ARRIVED';
+  }
+
+  if (diff > 0) {
+    return `${diff} MINS LATE ARRIVED`;
+  }
+
+  const absDiff = Math.abs(diff);
+  return `${absDiff} MINS EARLY ARRIVED`;
+}
+
 export function formatDate(dateString: string, format: 'DDMONYY' | 'DDMON' | 'DD' | 'LONG' | 'CARD' = 'DDMONYY'): string {
   if (!dateString) return 'N/A';
   const date = new Date(dateString + 'T00:00:00Z');

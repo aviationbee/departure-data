@@ -17,12 +17,26 @@ export function generateFlightDepartureMessage(
   const captain = data.captain || 'N/A';
   const configure = data.configure || 'N/A';
 
+  const isOutstation = (user.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
+  const sta = data.sta ? `${data.sta} ${timeUnit}` : 'N/A';
+  const chocksOn = data.chocksOn ? `${data.chocksOn} ${timeUnit}` : 'N/A';
+  const doorOpen = data.doorOpen ? `${data.doorOpen} ${timeUnit}` : 'N/A';
+  const arrivalStatus = data.arrivalStatus || 'FLIGHT ON TIME ARRIVED';
+
   const std = data.std ? `${data.std} ${timeUnit}` : 'N/A';
   const doorClosed = data.doorClosed ? `${data.doorClosed} ${timeUnit}` : 'N/A';
   const chocksOff = data.chocksOff ? `${data.chocksOff} ${timeUnit}` : 'N/A';
   const airborne = data.airborne ? `${data.airborne} ${timeUnit}` : 'N/A';
   const departureStatus = data.departureStatus || 'ON TIME';
   const fuelUplift = data.fuelUplift || '0';
+
+  const arrivalTextSection = isOutstation
+    ? `STA: ${sta}
+C/ON: ${chocksOn}
+DOOR OPEN: ${doorOpen}
+ARRIVAL STATUS: ${arrivalStatus}
+`
+    : '';
 
   let loadSummarySection = '';
   if (mode === 'ldm') {
@@ -81,7 +95,7 @@ CONFIGURE: ${configure}
 
 FLIGHT OPERATIONS SUMMARY
 --------------------------------------
-STD: ${std}
+${arrivalTextSection}STD: ${std}
 DOOR CLOSED: ${doorClosed}
 CHOCKS OFF: ${chocksOff}
 AIRBORNE: ${airborne}

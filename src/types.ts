@@ -12,6 +12,10 @@ export interface FlightFormData {
   acType: string;
   captain: string;
   configure: string;
+  sta?: string;
+  chocksOn?: string;
+  doorOpen?: string;
+  arrivalStatus?: string;
   std: string;
   doorClosed: string;
   chocksOff: string;

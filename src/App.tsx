@@ -16,6 +16,7 @@ import {
   COMMON_DELAY_REASONS,
   findRouteByFlightNo,
   calculateDepartureStatus,
+  calculateArrivalStatus,
   getRegistrationDetails,
   getAircraftDetails,
 } from './data/aviationData';
@@ -61,6 +62,10 @@ const INITIAL_FORM_DATA: FlightFormData = {
   acType: '',
   captain: '',
   configure: '',
+  sta: '',
+  chocksOn: '',
+  doorOpen: '',
+  arrivalStatus: 'FLIGHT ON TIME ARRIVED',
   std: '',
   doorClosed: '',
   chocksOff: '',
@@ -255,6 +260,22 @@ export default function App() {
     }));
   }, [formData.paxMale, formData.paxFemale, formData.paxChild]);
 
+  // Auto calculate Arrival Status (for Outstation)
+  useEffect(() => {
+    if (formData.sta && formData.chocksOn) {
+      const arrStatus = calculateArrivalStatus(formData.sta, formData.chocksOn);
+      setFormData((prev) => ({
+        ...prev,
+        arrivalStatus: arrStatus,
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        arrivalStatus: 'FLIGHT ON TIME ARRIVED',
+      }));
+    }
+  }, [formData.sta, formData.chocksOn]);
+
   // Auto calculate Departure Status and toggle Delay Reason Box
   useEffect(() => {
     if (formData.std && formData.chocksOff) {
@@ -293,7 +314,10 @@ export default function App() {
   };
 
   // Format Time input: auto formats HHMM or digits
-  const handleTimeInput = (field: 'std' | 'doorClosed' | 'chocksOff' | 'airborne', rawVal: string) => {
+  const handleTimeInput = (
+    field: 'sta' | 'chocksOn' | 'doorOpen' | 'std' | 'doorClosed' | 'chocksOff' | 'airborne',
+    rawVal: string
+  ) => {
     const digits = rawVal.replace(/\D/g, '').slice(0, 4);
     setFormData((prev) => ({
       ...prev,
@@ -355,6 +379,10 @@ export default function App() {
         acType: 'AIRBUS 330',
         captain: 'LUTFOR',
         configure: '2/5',
+        sta: '1845',
+        chocksOn: '1835',
+        doorOpen: '1838',
+        arrivalStatus: '10 MINS EARLY ARRIVED',
         std: '1945',
         doorClosed: '1940',
         chocksOff: '1945',
@@ -409,6 +437,10 @@ export default function App() {
         acType: 'ATR 72 600',
         captain: 'AHMAD',
         configure: '2/5',
+        sta: '0930',
+        chocksOn: '0920',
+        doorOpen: '0922',
+        arrivalStatus: '10 MINS EARLY ARRIVED',
         std: '1000',
         doorClosed: '0958',
         chocksOff: '0959',
@@ -454,6 +486,7 @@ export default function App() {
     showToast('Sample flight data loaded!');
   };
 
+  const isOutstation = (userInfo.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
   const departureMessage = generateFlightDepartureMessage(formData, userInfo, reportType);
 
   return (
@@ -792,6 +825,101 @@ export default function App() {
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                 />
               </div>
+
+              {/* OUTSTATION ONLY: ARRIVAL INFORMATION BORDERED SECTION */}
+              {isOutstation && (
+                <div className="md:col-span-full border-2 border-emerald-500/70 bg-emerald-950/20 rounded-2xl p-4 md:p-5 shadow-xl">
+                  <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-emerald-500/30">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-400">
+                      <Plane className="w-3.5 h-3.5 rotate-90" />
+                    </span>
+                    <h3 className="text-sm md:text-base font-black tracking-widest text-emerald-400 uppercase">
+                      ARRIVAL INFORMATION
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* 1ST BOX: STA (LT) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-emerald-300 mb-1 tracking-wider uppercase">
+                        STA (LT)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="1000"
+                        maxLength={4}
+                        value={formData.sta || ''}
+                        onChange={(e) => handleTimeInput('sta', e.target.value)}
+                        className="p-2.5 border border-emerald-600/60 rounded-xl bg-slate-800/90 text-white focus:border-emerald-400 focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
+                      />
+                    </div>
+
+                    {/* 2ND BOX: C/ON (LT) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-emerald-300 mb-1 tracking-wider uppercase">
+                        C/ON (LT)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="0950"
+                        maxLength={4}
+                        value={formData.chocksOn || ''}
+                        onChange={(e) => handleTimeInput('chocksOn', e.target.value)}
+                        className="p-2.5 border border-emerald-600/60 rounded-xl bg-slate-800/90 text-white focus:border-emerald-400 focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
+                      />
+                    </div>
+
+                    {/* 3RD BOX: DOOR OPEN (LT) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-emerald-300 mb-1 tracking-wider uppercase">
+                        DOOR OPEN (LT)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="0952"
+                        maxLength={4}
+                        value={formData.doorOpen || ''}
+                        onChange={(e) => handleTimeInput('doorOpen', e.target.value)}
+                        className="p-2.5 border border-emerald-600/60 rounded-xl bg-slate-800/90 text-white focus:border-emerald-400 focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
+                      />
+                    </div>
+
+                    {/* 4TH BOX: ARRIVAL STATUS */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-emerald-300 mb-1 tracking-wider uppercase">
+                        ARRIVAL STATUS
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.arrivalStatus || 'FLIGHT ON TIME ARRIVED'}
+                        onChange={(e) =>
+                          setFormData({ ...formData, arrivalStatus: e.target.value.toUpperCase() })
+                        }
+                        className="p-2.5 border border-emerald-500/70 rounded-xl bg-slate-800 text-emerald-300 font-bold text-sm tracking-wide uppercase"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* DEPARTURE INFORMATION (Bordered section for Outstation, seamless grid for DAC) */}
+              <div
+                className={
+                  isOutstation
+                    ? 'md:col-span-full border-2 border-sky-500/70 bg-sky-950/20 rounded-2xl p-4 md:p-5 shadow-xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
+                    : 'contents'
+                }
+              >
+                {isOutstation && (
+                  <div className="col-span-full flex items-center gap-2 mb-1 pb-2 border-b border-sky-500/30">
+                    <span className="w-6 h-6 rounded-lg bg-sky-500/20 border border-sky-400/50 flex items-center justify-center text-sky-400">
+                      <Plane className="w-3.5 h-3.5" />
+                    </span>
+                    <h3 className="text-sm md:text-base font-black tracking-widest text-sky-400 uppercase">
+                      DEPARTURE INFORMATION
+                    </h3>
+                  </div>
+                )}
 
               {/* STD */}
               <div className="flex flex-col">
@@ -1305,6 +1433,7 @@ export default function App() {
                   onChange={(e) => setFormData({ ...formData, noshowPnr: e.target.value.toUpperCase() })}
                   className="p-2.5 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase font-bold"
                 />
+              </div>
               </div>
 
               {/* REMARKS */}

@@ -112,6 +112,14 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
     return timeStr.toUpperCase();
   };
 
+  // Station check: Outstation vs DAC
+  const isOutstation = (user.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
+
+  // Arrival Status Styling (for Outstation)
+  const arrivalStatusUpper = (data.arrivalStatus || 'FLIGHT ON TIME ARRIVED').toUpperCase();
+  const isArrivalLate = arrivalStatusUpper.includes('LATE') || arrivalStatusUpper.includes('DELAY');
+  const isArrivalEarly = arrivalStatusUpper.includes('EARLY');
+
   // Departure Status Styling
   const statusUpper = (data.departureStatus || 'FLIGHT ONTIME').toUpperCase();
   const isDelayed = statusUpper.includes('DELAY');
@@ -280,65 +288,205 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
             </div>
           </div>
 
-          {/* ROW 2: TIMINGS BAR */}
-          <div className="bg-white rounded-2xl p-3.5 mt-3 border border-slate-300 shadow-sm flex justify-between items-center px-6 uppercase">
-            <div className="flex items-center gap-8">
-              <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow">
-                <Clock className="w-5 h-5" />
+          {/* ROW 2: TIMINGS BAR (2-Part Arrival & Departure for Outstation, Single Bar for DAC) */}
+          {isOutstation ? (
+            <div className="grid grid-cols-2 gap-3.5 mt-3 uppercase">
+              {/* LEFT PART: ARRIVAL INFORMATION (Soft Mint/Emerald Tint Background) */}
+              <div className="bg-gradient-to-br from-emerald-50 via-teal-50/90 to-emerald-100/75 rounded-2xl p-3.5 border-2 border-emerald-500/60 shadow-sm flex flex-col justify-between gap-2.5">
+                <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-700 text-white flex items-center justify-center shadow">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <span className="text-[11px] font-black text-emerald-900 tracking-wider uppercase">
+                      ARRIVAL INFO
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-5">
+                    {/* # STA */}
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-emerald-800 uppercase"># STA</span>
+                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                        {formatTime4(data.sta || '')}
+                      </span>
+                    </div>
+
+                    {/* # C/ON */}
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-emerald-800 uppercase"># C/ON</span>
+                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                        {formatTime4(data.chocksOn || '')}
+                      </span>
+                    </div>
+
+                    {/* # DOOR OPEN */}
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-emerald-800 uppercase"># DOOR OPEN</span>
+                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                        {formatTime4(data.doorOpen || '')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Arrival Status Badge: Early = Green, On Time = Yellow, Late/Delay = Red */}
+                <div
+                  className={`px-3.5 py-2 rounded-xl border-2 flex items-center justify-between gap-2 font-black text-xs tracking-wide shadow-sm uppercase ${
+                    isArrivalLate
+                      ? 'bg-red-100/95 text-red-600 border-red-500 font-black'
+                      : isArrivalEarly
+                      ? 'bg-emerald-100/95 text-emerald-700 border-emerald-500 font-black'
+                      : 'bg-amber-100/95 text-amber-600 border-amber-400 font-black'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Plane className="w-4 h-4 rotate-90 shrink-0" />
+                    <span className="font-black">{arrivalStatusUpper}</span>
+                  </div>
+                  {isArrivalLate ? (
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  ) : isArrivalEarly ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
+                  )}
+                </div>
               </div>
 
-              {/* STD */}
-              <div className="flex flex-col items-center">
-                <span className="text-[11px] font-black text-slate-600 uppercase">STD</span>
-                <span className="text-xl font-black text-slate-950 tracking-wider">
-                  {formatTime4(data.std)}
-                </span>
-              </div>
+              {/* RIGHT PART: DEPARTURE INFORMATION (Soft Sky/Blue Tint Background) */}
+              <div className="bg-gradient-to-br from-sky-50 via-blue-50/90 to-indigo-100/75 rounded-2xl p-3.5 border-2 border-sky-500/60 shadow-sm flex flex-col justify-between gap-2.5">
+                <div className="flex items-center justify-between border-b border-sky-200/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-sky-700 text-white flex items-center justify-center shadow">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <span className="text-[11px] font-black text-sky-900 tracking-wider uppercase">
+                      DEPARTURE INFO
+                    </span>
+                  </div>
 
-              {/* D/C */}
-              <div className="flex flex-col items-center">
-                <span className="text-[11px] font-black text-slate-600 uppercase"># D/C</span>
-                <span className="text-xl font-black text-slate-950 tracking-wider">
-                  {formatTime4(data.doorClosed)}
-                </span>
-              </div>
+                  <div className="flex items-center gap-4">
+                    {/* # STD */}
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-sky-800 uppercase"># STD</span>
+                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                        {formatTime4(data.std)}
+                      </span>
+                    </div>
 
-              {/* C/OFF */}
-              <div className="flex flex-col items-center">
-                <span className="text-[11px] font-black text-slate-600 uppercase"># C/OFF</span>
-                <span className="text-xl font-black text-slate-950 tracking-wider">
-                  {formatTime4(data.chocksOff)}
-                </span>
-              </div>
+                    {/* # C/OFF */}
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-sky-800 uppercase"># C/OFF</span>
+                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                        {formatTime4(data.chocksOff)}
+                      </span>
+                    </div>
 
-              {/* A/B */}
-              <div className="flex flex-col items-center">
-                <span className="text-[11px] font-black text-slate-600 uppercase"># A/B</span>
-                <span className="text-xl font-black text-slate-950 tracking-wider">
-                  {formatTime4(data.airborne)}
-                </span>
+                    {/* # DOOR CLOSED */}
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-sky-800 uppercase"># DOOR CLOSED</span>
+                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                        {formatTime4(data.doorClosed)}
+                      </span>
+                    </div>
+
+                    {/* # AIRBORNE */}
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-sky-800 uppercase"># AIRBORNE</span>
+                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                        {formatTime4(data.airborne)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Departure Status Badge: Early = Green, On Time = Yellow, Delay = Red */}
+                <div
+                  className={`px-3.5 py-2 rounded-xl border-2 flex items-center justify-between gap-2 font-black text-xs tracking-wide shadow-sm uppercase ${
+                    isDelayed
+                      ? 'bg-red-100/95 text-red-600 border-red-500 font-black'
+                      : isEarly
+                      ? 'bg-emerald-100/95 text-emerald-700 border-emerald-500 font-black'
+                      : 'bg-amber-100/95 text-amber-600 border-amber-400 font-black'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Plane className="w-4 h-4 shrink-0" />
+                    <span className="font-black">{statusUpper}</span>
+                  </div>
+                  {isDelayed ? (
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  ) : isEarly ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
+                  )}
+                </div>
               </div>
             </div>
+          ) : (
+            <div className="bg-white rounded-2xl p-3.5 mt-3 border border-slate-300 shadow-sm flex justify-between items-center px-6 uppercase">
+              <div className="flex items-center gap-8">
+                <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow">
+                  <Clock className="w-5 h-5" />
+                </div>
 
-            {/* Status Badge */}
-            <div
-              className={`px-5 py-2.5 rounded-xl border flex items-center gap-2.5 font-black text-xs md:text-sm tracking-wide shadow-sm uppercase ${
-                isDelayed
-                  ? 'bg-amber-100/90 text-amber-950 border-amber-400 font-extrabold'
-                  : isEarly
-                  ? 'bg-sky-100/90 text-sky-950 border-sky-400 font-extrabold'
-                  : 'bg-emerald-100/90 text-emerald-950 border-emerald-400 font-extrabold'
-              }`}
-            >
-              <Plane className="w-4 h-4" />
-              <span>{statusUpper}</span>
-              {isDelayed ? (
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
-              ) : (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              )}
+                {/* STD */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[11px] font-black text-slate-600 uppercase">STD</span>
+                  <span className="text-xl font-black text-slate-950 tracking-wider">
+                    {formatTime4(data.std)}
+                  </span>
+                </div>
+
+                {/* D/C */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[11px] font-black text-slate-600 uppercase"># D/C</span>
+                  <span className="text-xl font-black text-slate-950 tracking-wider">
+                    {formatTime4(data.doorClosed)}
+                  </span>
+                </div>
+
+                {/* C/OFF */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[11px] font-black text-slate-600 uppercase"># C/OFF</span>
+                  <span className="text-xl font-black text-slate-950 tracking-wider">
+                    {formatTime4(data.chocksOff)}
+                  </span>
+                </div>
+
+                {/* A/B */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[11px] font-black text-slate-600 uppercase"># A/B</span>
+                  <span className="text-xl font-black text-slate-950 tracking-wider">
+                    {formatTime4(data.airborne)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Badge: Early = Green, On Time = Yellow, Delay = Red */}
+              <div
+                className={`px-5 py-2.5 rounded-xl border-2 flex items-center gap-2.5 font-black text-xs md:text-sm tracking-wide shadow-sm uppercase ${
+                  isDelayed
+                    ? 'bg-red-100/95 text-red-600 border-red-500 font-black'
+                    : isEarly
+                    ? 'bg-emerald-100/95 text-emerald-700 border-emerald-500 font-black'
+                    : 'bg-amber-100/95 text-amber-600 border-amber-400 font-black'
+                }`}
+              >
+                <Plane className="w-4 h-4" />
+                <span className="font-black">{statusUpper}</span>
+                {isDelayed ? (
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                ) : isEarly ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                ) : (
+                  <CheckCircle2 className="w-5 h-5 text-amber-600" />
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ROW 3: THREE FLIGHT DATA BOXES (LOAD SUMMARY, SPECIAL HANDLING, STAFF DETAILS) - HIGHLIGHTED & BOLD */}
           <div className="grid grid-cols-3 gap-4 mt-3 uppercase">
