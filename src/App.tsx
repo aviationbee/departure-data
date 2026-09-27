@@ -20,7 +20,7 @@ import {
   getRegistrationDetails,
   getAircraftDetails,
 } from './data/aviationData';
-import { generateFlightDepartureMessage } from './utils/reportGenerators';
+import { generateFlightDepartureMessage, parseFlstMessage } from './utils/reportGenerators';
 import { DepartureReportTable } from './components/DepartureReportTable';
 import { DeparturePhotoCard } from './components/DeparturePhotoCard';
 import {
@@ -113,6 +113,7 @@ const INITIAL_FORM_DATA: FlightFormData = {
   paxHandling: '',
   noshowPnr: '',
   remarks: '',
+  flstRawMessage: '',
 };
 
 // Animated Typewriter Text component
@@ -427,6 +428,12 @@ export default function App() {
         loadController: 'RADOAN RASEL',
         paxHandling: 'NIL',
         remarks: 'NOSHOW PNR: X8Y9Z1, GATENOSHOW: K2L9P0',
+        flstRawMessage: ` 1   ALAM/MD MONJUR  MR        ETKT42414411 7792412566959                          I   I  DAC CGP     0ADPN4/BS/BS 0  20.00kg 0.00/20.00kg Exc 0kg 18C AD AD                        
+        MAAS                      Commissioner of taxes, Ministry of Finance, NBR, BD
+    2   RAHMAN/ANISUR CAPT        TKNE42517876 7794883669747                          X   I  DAC CGP     0AELDQ/1B/BS 0  20.00kg 0.00/20.00kg Exc 0kg 17C AD AD                        
+        WCHR                      DIRECTOR SEA CONSORTIUM BD LTD                      
+    3   RASHED/MIR  MR            ETKT42517550 7792412595230                          T   I  DAC CGP     0AELAH/BS/BS 0  20.00kg 0.00/20.00kg Exc 0kg 18A AD AD                        
+        MAAS                      Additional chief engineer.PWD`,
       });
     } else {
       setFormData({
@@ -481,6 +488,12 @@ export default function App() {
         loadController: 'ABIR',
         paxHandling: 'NORMAL',
         remarks: 'NOSHOW PNR: P8L2M1',
+        flstRawMessage: ` 1   ALAM/MD MONJUR  MR        ETKT42414411 7792412566959                          I   I  DAC CGP     0ADPN4/BS/BS 0  20.00kg 0.00/20.00kg Exc 0kg 18C AD AD                        
+        MAAS                      Commissioner of taxes, Ministry of Finance, NBR, BD
+    2   RAHMAN/ANISUR CAPT        TKNE42517876 7794883669747                          X   I  DAC CGP     0AELDQ/1B/BS 0  20.00kg 0.00/20.00kg Exc 0kg 17C AD AD                        
+        WCHR                      DIRECTOR SEA CONSORTIUM BD LTD                      
+    3   RASHED/MIR  MR            ETKT42517550 7792412595230                          T   I  DAC CGP     0AELAH/BS/BS 0  20.00kg 0.00/20.00kg Exc 0kg 18A AD AD                        
+        MAAS                      Additional chief engineer.PWD`,
       });
     }
     showToast('Sample flight data loaded!');
@@ -488,6 +501,7 @@ export default function App() {
 
   const isOutstation = (userInfo.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
   const departureMessage = generateFlightDepartureMessage(formData, userInfo, reportType);
+  const flstWhatsappMessage = parseFlstMessage(formData.flstRawMessage, formData);
 
   return (
     <div className="aviation-modern-bg min-h-screen w-full flex flex-col font-serif select-text text-white relative">
@@ -1447,6 +1461,20 @@ export default function App() {
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                 />
               </div>
+
+              {/* VIP/MAAS/WCHR MESSAGE ( COPY FROM FLST-IF HAVE) */}
+              <div className="flex flex-col md:col-span-full">
+                <label className="font-bold text-amber-300 mb-1 tracking-wider uppercase">
+                  VIP/MAAS/WCHR MESSAGE ( COPY FROM FLST-IF HAVE)
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="PASTE VIP / MAAS / WCHR PASSENGER LIST COPIED FROM FLIGHT DCS (FLST) SYSTEM HERE..."
+                  value={formData.flstRawMessage || ''}
+                  onChange={(e) => setFormData({ ...formData, flstRawMessage: e.target.value })}
+                  className="p-3 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-xs md:text-sm font-mono leading-relaxed"
+                />
+              </div>
             </div>
 
             {/* Bottom Actions */}
@@ -1539,6 +1567,39 @@ export default function App() {
               className="no-print bg-slate-900/80 backdrop-blur-xl border border-slate-700/70 rounded-2xl p-5 shadow-2xl flex flex-col"
             >
               <DeparturePhotoCard data={formData} user={userInfo} />
+            </div>
+
+            {/* Panel 1.5: VIP/MAAS/WCHR MESSAGE (WHATSAPP MESSAGE) */}
+            <div className="no-print bg-slate-900/85 backdrop-blur-xl border border-emerald-500/50 rounded-2xl p-5 shadow-2xl flex flex-col">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 mb-4 gap-3">
+                <h2 className="text-base font-bold tracking-wider text-white uppercase flex items-center gap-2">
+                  <Send className="w-4 h-4 text-emerald-400" />
+                  <span>VIP/MAAS/WCHR MESSAGE (WHATSAPP MESSAGE)</span>
+                </h2>
+
+                <button
+                  onClick={() =>
+                    copyToClipboard(
+                      flstWhatsappMessage || 'NIL',
+                      'VIP/MAAS/WCHR WhatsApp Message'
+                    )
+                  }
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-lg"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>COPY WHATSAPP MESSAGE</span>
+                </button>
+              </div>
+
+              <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 font-mono text-xs md:text-sm text-emerald-300 whitespace-pre-wrap leading-relaxed select-all">
+                {flstWhatsappMessage ? (
+                  flstWhatsappMessage
+                ) : (
+                  <span className="text-slate-500 italic">
+                    NIL (No VIP/MAAS/WCHR FLST message entered)
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Panel 2: Official Departure Report Table (Printable A4) */}

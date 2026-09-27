@@ -413,3 +413,145 @@ USBA-${(user.usbaId || 'N/A').toUpperCase()} II DAC APT II`;
 
   return ldm;
 }
+
+export function parseFlstMessage(rawText?: string, data?: FlightReportData): string {
+  if (!rawText || !rawText.trim()) return '';
+
+  const flightNo = data?.flightNoSuffix
+    ? `BS-${data.flightNoSuffix.trim().toUpperCase()}`
+    : 'BS-XXX';
+  const regDisplay = data?.acRegSuffix
+    ? getRegistrationDetails(data.acRegSuffix).display
+    : 'S2-XXX';
+  let dateStr = 'N/A';
+  if (data?.date) {
+    const parts = data.date.split('-');
+    if (parts.length === 3) {
+      const [yyyy, mm, dd] = parts;
+      dateStr = `${dd}-${mm}-${yyyy.slice(-2)}`;
+    } else {
+      dateStr = data.date;
+    }
+  }
+
+  const header = `${flightNo} PRIORITY MESSAGE\n${regDisplay}\nDATE-${dateStr}\n\n`;
+
+  const lines = rawText.split(/\r?\n/);
+
+  interface ParsedFlstPax {
+    serial: string;
+    paxName: string;
+    pnr: string;
+    seat: string;
+    category: string;
+    designation: string;
+  }
+
+  const paxList: ParsedFlstPax[] = [];
+  let currentPax: ParsedFlstPax | null = null;
+
+  for (const rawLine of lines) {
+    if (!rawLine.trim()) continue;
+
+    const mainMatch = rawLine.match(/^\s*(\d+)\s+(.+)$/);
+    const rest = mainMatch ? mainMatch[2] : '';
+    const looksLikeFlstMain =
+      Boolean(mainMatch) &&
+      (/(?:ETKT|TKNE)/i.test(rest) ||
+        /\b[A-Z0-9]{5,8}\/[A-Z0-9]{2}/i.test(rest) ||
+        /\d+\.\d+kg/i.test(rest));
+
+    if (looksLikeFlstMain && mainMatch) {
+      if (currentPax) {
+        paxList.push(currentPax);
+      }
+
+      const serial = mainMatch[1].trim();
+
+      // Extract Pax Name (before ETKT / TKNE / 10+ digit ticket number)
+      let paxName = rest;
+      const nameSplit = rest.split(/\s+(?=ETKT|TKNE|\d{10,})/i);
+      if (nameSplit.length > 1) {
+        paxName = nameSplit[0].trim();
+      } else {
+        const multiSpaceSplit = rest.split(/\s{3,}/);
+        paxName = multiSpaceSplit[0].trim();
+      }
+
+      // Extract PNR (e.g. 0ADPN4 from 0ADPN4/BS/BS or 0AELDQ from 0AELDQ/1B/BS)
+      let pnr = '';
+      let afterPnrText = rest;
+      const pnrMatch = rest.match(/\b([A-Z0-9]{5,8})\/[A-Z0-9]{2}(?:\/[A-Z0-9]{2})?\b/i);
+      if (pnrMatch && pnrMatch.index !== undefined) {
+        pnr = pnrMatch[1].toUpperCase();
+        afterPnrText = rest.slice(pnrMatch.index + pnrMatch[0].length);
+      }
+
+      // Extract Seat (e.g. 18C, 17C, 18A)
+      let seat = '';
+      const seatAfterExc = afterPnrText.match(/Exc\s+\d+(?:\.\d+)?kg\s+([0-9]{1,3}[A-K])\b/i);
+      if (seatAfterExc) {
+        seat = seatAfterExc[1].toUpperCase();
+      } else {
+        const allSeatMatches = [...afterPnrText.matchAll(/\b([0-9]{1,3}[A-K])\b/gi)];
+        if (allSeatMatches.length > 0) {
+          seat = allSeatMatches[allSeatMatches.length - 1][1].toUpperCase();
+        }
+      }
+
+      currentPax = {
+        serial,
+        paxName,
+        pnr,
+        seat,
+        category: '',
+        designation: '',
+      };
+    } else if (currentPax) {
+      // Continuation / SSR line: e.g. "        MAAS                      Commissioner of taxes, Ministry of Finance, NBR, BD"
+      const trimmedSub = rawLine.trim();
+      const ssrMatch = trimmedSub.match(/^([A-Z0-9/]{2,10})(?:\s+(.*))?$/i);
+      if (ssrMatch) {
+        const code = ssrMatch[1].trim().toUpperCase();
+        const note = (ssrMatch[2] || '').trim();
+        if (!currentPax.category) {
+          currentPax.category = code;
+          currentPax.designation = note;
+        } else {
+          currentPax.category = `${currentPax.category}/${code}`;
+          if (note) {
+            currentPax.designation = currentPax.designation
+              ? `${currentPax.designation}, ${note}`
+              : note;
+          }
+        }
+      } else {
+        currentPax.designation = currentPax.designation
+          ? `${currentPax.designation} ${trimmedSub}`
+          : trimmedSub;
+      }
+    }
+  }
+
+  if (currentPax) {
+    paxList.push(currentPax);
+  }
+
+  if (paxList.length === 0) {
+    return `${header}${rawText.trim()}`;
+  }
+
+  const body = paxList
+    .map((pax, idx) => {
+      const num = String(idx + 1);
+      const segments: string[] = [`${num}.${pax.paxName} `];
+      if (pax.category) segments.push(`-${pax.category}`);
+      if (pax.pnr) segments.push(`-${pax.pnr}`);
+      if (pax.seat) segments.push(`-${pax.seat}`);
+      if (pax.designation) segments.push(`-${pax.designation}`);
+      return segments.join(' ');
+    })
+    .join('\n');
+
+  return `${header}${body}`;
+}

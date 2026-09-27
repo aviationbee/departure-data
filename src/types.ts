@@ -63,6 +63,7 @@ export interface FlightFormData {
   paxHandling: string;
   noshowPnr?: string;
   remarks: string;
+  flstRawMessage?: string;
   dist?: {
     b1?: string;
     b2?: string;

@@ -204,15 +204,15 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
             </div>
 
             {/* Right: Big, Bold, Highlighted FLIGHT NO Badge for instant WhatsApp preview recognition */}
-            <div className="relative z-10 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 text-slate-950 px-5 py-2 rounded-2xl border-2 border-white shadow-xl flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-slate-950 text-amber-300 flex items-center justify-center shadow-md shrink-0">
+            <div className="relative z-10 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 text-slate-950 px-6 py-2.5 rounded-2xl border-2 border-white shadow-xl flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-slate-950 text-amber-300 flex items-center justify-center shadow-md shrink-0">
                 <Plane className="w-6 h-6" />
               </div>
               <div className="flex flex-col leading-none">
                 <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-1">
                   FLIGHT NO.
                 </span>
-                <span className="text-3xl font-black text-slate-950 tracking-wider uppercase">
+                <span className="text-4xl font-black text-slate-950 tracking-wider uppercase leading-none">
                   {flightNumber}
                 </span>
               </div>
@@ -272,17 +272,17 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
               </div>
             </div>
 
-            {/* Crew Count / Configure */}
+            {/* A/C AND CREW */}
             <div className="bg-white rounded-2xl p-3 border border-slate-300 shadow-sm flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-indigo-700 text-white flex items-center justify-center shadow">
+              <div className="w-11 h-11 rounded-xl bg-indigo-700 text-white flex items-center justify-center shadow shrink-0">
                 <Users className="w-6 h-6" />
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
-                  CREW COUNT
+                  A/C AND CREW
                 </span>
-                <span className="text-base font-black text-slate-900 uppercase">
-                  {configureDisplay}
+                <span className="text-sm md:text-[15px] font-black text-slate-900 uppercase whitespace-nowrap">
+                  {regDetails.display}&nbsp;&nbsp;II&nbsp;&nbsp;{configureDisplay}
                 </span>
               </div>
             </div>
