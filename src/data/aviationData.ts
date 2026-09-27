@@ -283,6 +283,23 @@ export function calculateArrivalStatus(sta?: string, chocksOn?: string): string 
   return `${absDiff} MINS EARLY ARRIVED`;
 }
 
+export function calculateGroundTime(chocksOn?: string, chocksOff?: string): string {
+  const onMin = parseTimeToMinutes(chocksOn || '');
+  const offMin = parseTimeToMinutes(chocksOff || '');
+
+  if (onMin === null || offMin === null) {
+    return '----';
+  }
+
+  let diff = offMin - onMin;
+  // Handle midnight wrap
+  if (diff < 0) {
+    diff += 1440;
+  }
+
+  return `${diff} MINS`;
+}
+
 export function formatDate(dateString: string, format: 'DDMONYY' | 'DDMON' | 'DD' | 'LONG' | 'CARD' = 'DDMONYY'): string {
   if (!dateString) return 'N/A';
   const date = new Date(dateString + 'T00:00:00Z');

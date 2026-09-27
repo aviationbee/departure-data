@@ -17,6 +17,7 @@ import {
   findRouteByFlightNo,
   calculateDepartureStatus,
   calculateArrivalStatus,
+  calculateGroundTime,
   getRegistrationDetails,
   getAircraftDetails,
 } from './data/aviationData';
@@ -973,6 +974,21 @@ export default function App() {
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
                 />
               </div>
+
+              {/* GROUND TIME (Outstation Only - Auto Calculated from Arrival C/ON to Departure C/OFF, Not Editable) */}
+              {isOutstation && (
+                <div className="flex flex-col">
+                  <label className="font-bold text-sky-300 mb-1 tracking-wider uppercase">
+                    GROUND TIME
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={calculateGroundTime(formData.chocksOn, formData.chocksOff)}
+                    className="p-2.5 border border-sky-500/70 rounded-xl bg-slate-900/95 text-sky-300 text-sm font-mono text-center tracking-wider font-black cursor-not-allowed select-none"
+                  />
+                </div>
+              )}
 
               {/* AIRBORNE */}
               <div className="flex flex-col">
