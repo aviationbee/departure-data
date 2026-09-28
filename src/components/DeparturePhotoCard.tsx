@@ -183,44 +183,44 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
       <div className="w-full overflow-x-auto pb-2 flex justify-center uppercase">
         <div
           ref={cardRef}
-          className="w-[1020px] min-w-[1020px] bg-slate-100 rounded-3xl p-6 shadow-2xl border border-slate-300 font-sans text-slate-900 select-none relative overflow-hidden uppercase"
+          className="w-[1060px] min-w-[1060px] h-auto bg-slate-100 rounded-3xl p-6 shadow-2xl border border-slate-300 font-sans text-slate-900 select-none relative overflow-hidden uppercase"
           style={{
             fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)',
           }}
         >
           {/* TOP BANNER */}
-          <div className="w-full rounded-2xl bg-gradient-to-r from-[#003b6d] via-[#025a9e] to-[#0072bc] p-4 text-white flex justify-between items-center shadow-md relative overflow-hidden">
+          <div className="w-full rounded-2xl bg-gradient-to-r from-[#003b6d] via-[#025a9e] to-[#0072bc] p-4 text-white flex justify-between items-center gap-4 shadow-md relative overflow-hidden">
             {/* Left: Airline Branding */}
-            <div className="flex flex-col z-10">
-              <h2 className="text-2xl font-black tracking-wider text-white uppercase drop-shadow-sm flex items-center gap-2">
+            <div className="flex flex-col z-10 shrink-0">
+              <h2 className="text-2xl leading-tight font-black tracking-wider text-white uppercase drop-shadow-sm flex items-center gap-2 whitespace-nowrap">
                 <span>US BANGLA AIRLINES</span>
               </h2>
-              <span className="text-[11px] font-bold tracking-widest text-sky-200 uppercase">
+              <span className="text-xs font-bold tracking-widest text-sky-200 uppercase mt-0.5 whitespace-nowrap">
                 FLY FAST &bull; FLY SAFE
               </span>
             </div>
 
             {/* Center: Badge with Airplane */}
-            <div className="flex items-center gap-3 z-10">
-              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm border-2 border-white/40 flex items-center justify-center shadow-inner">
+            <div className="flex items-center gap-3 z-10 shrink-0">
+              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm border-2 border-white/40 flex items-center justify-center shadow-inner shrink-0">
                 <Plane className="w-6 h-6 text-white rotate-[-30deg]" />
               </div>
-              <h1 className="text-xl font-black tracking-widest text-white uppercase drop-shadow">
+              <h1 className="text-xl font-black tracking-widest text-white uppercase drop-shadow whitespace-nowrap">
                 STATION DEPARTURE REPORT
               </h1>
             </div>
 
             {/* Right: Big, Bold, Highlighted FLIGHT NO Badge for instant WhatsApp preview recognition */}
-            <div className="relative z-10 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 text-slate-950 px-6 py-2.5 rounded-2xl border-2 border-white shadow-xl flex items-center gap-3.5">
+            <div className="relative z-10 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 text-slate-950 px-6 py-2.5 rounded-2xl border-2 border-white shadow-xl flex items-center gap-3.5 shrink-0">
               <div className="w-12 h-12 rounded-xl bg-slate-950 text-amber-300 flex items-center justify-center shadow-md shrink-0">
                 <Plane className="w-6 h-6" />
               </div>
-              <div className="flex flex-col leading-none">
-                <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-1">
+              <div className="flex flex-col leading-none whitespace-nowrap">
+                <span className="text-[11px] font-black text-slate-800 uppercase tracking-widest mb-1 whitespace-nowrap">
                   FLIGHT NO.
                 </span>
-                <span className="text-4xl font-black text-slate-950 tracking-wider uppercase leading-none">
+                <span className="text-4xl font-black text-slate-950 tracking-wider uppercase leading-none whitespace-nowrap">
                   {flightNumber}
                 </span>
               </div>
@@ -233,63 +233,63 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
           {/* ROW 1: 4 INFO PILLS */}
           <div className="grid grid-cols-4 gap-3.5 mt-4 uppercase">
             {/* From / To */}
-            <div className="bg-white rounded-2xl p-3 border border-slate-300 shadow-sm flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow">
+            <div className="bg-white rounded-2xl p-3.5 border border-slate-300 shadow-sm flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow shrink-0">
                 <MapPin className="w-6 h-6" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
                   FROM / TO
                 </span>
-                <span className="text-base font-black text-slate-900 tracking-tight uppercase">
+                <span className="text-lg font-black text-slate-900 tracking-tight uppercase leading-snug">
                   {originCode} &rarr; {destCode}
                 </span>
-                <span className="text-[9px] font-bold text-slate-600 truncate max-w-[140px] uppercase">
+                <span className="text-[11px] font-bold text-slate-600 truncate max-w-[175px] uppercase">
                   {originCity} &rarr; {destCity}
                 </span>
               </div>
             </div>
 
             {/* Date */}
-            <div className="bg-white rounded-2xl p-3 border border-slate-300 shadow-sm flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-blue-700 text-white flex items-center justify-center shadow">
+            <div className="bg-white rounded-2xl p-3.5 border border-slate-300 shadow-sm flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-blue-700 text-white flex items-center justify-center shadow shrink-0">
                 <Calendar className="w-6 h-6" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
                   DATE
                 </span>
-                <span className="text-sm font-black text-slate-900 uppercase">
+                <span className="text-base font-black text-slate-900 uppercase leading-snug">
                   {displayDate}
                 </span>
               </div>
             </div>
 
             {/* Captain */}
-            <div className="bg-white rounded-2xl p-3 border border-slate-300 shadow-sm flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-sky-700 text-white flex items-center justify-center shadow">
+            <div className="bg-white rounded-2xl p-3.5 border border-slate-300 shadow-sm flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-sky-700 text-white flex items-center justify-center shadow shrink-0">
                 <UserCheck className="w-6 h-6" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
                   CAPTAIN
                 </span>
-                <span className="text-sm font-black text-slate-900 uppercase truncate max-w-[135px]">
+                <span className="text-base font-black text-slate-900 uppercase truncate max-w-[165px] leading-snug">
                   {captainDisplay}
                 </span>
               </div>
             </div>
 
             {/* A/C AND CREW */}
-            <div className="bg-white rounded-2xl p-3 border border-slate-300 shadow-sm flex items-center gap-3">
+            <div className="bg-white rounded-2xl p-3.5 border border-slate-300 shadow-sm flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-indigo-700 text-white flex items-center justify-center shadow shrink-0">
                 <Users className="w-6 h-6" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
                   A/C AND CREW
                 </span>
-                <span className="text-sm md:text-[15px] font-black text-slate-900 uppercase whitespace-nowrap">
+                <span className="text-base font-black text-slate-900 uppercase whitespace-nowrap leading-snug">
                   {regDetails.display}&nbsp;&nbsp;II&nbsp;&nbsp;{configureDisplay}
                 </span>
               </div>
@@ -298,15 +298,15 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
 
           {/* ROW 2: TIMINGS BAR (3-Part Arrival, Departure & Ground Time for Outstation, Single Bar for DAC) */}
           {isOutstation ? (
-            <div className="grid grid-cols-[1fr_1.16fr_152px] gap-2.5 mt-3 uppercase">
+            <div className="grid grid-cols-[1fr_1.16fr_164px] gap-2.5 mt-3.5 uppercase">
               {/* LEFT PART: ARRIVAL INFORMATION (Soft Mint/Emerald Tint Background) */}
-              <div className="bg-gradient-to-br from-emerald-50 via-teal-50/90 to-emerald-100/75 rounded-2xl p-3 border-2 border-emerald-500/60 shadow-sm flex flex-col justify-between gap-2.5">
+              <div className="bg-gradient-to-br from-emerald-50 via-teal-50/90 to-emerald-100/75 rounded-2xl p-3.5 border-2 border-emerald-500/60 shadow-sm flex flex-col justify-between gap-2.5">
                 <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
                   <div className="flex items-center gap-1.5">
                     <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center shadow shrink-0">
                       <Clock className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-black text-emerald-950 tracking-wider uppercase whitespace-nowrap">
+                    <span className="text-[13px] font-black text-emerald-950 tracking-wider uppercase whitespace-nowrap">
                       ARRIVAL
                     </span>
                   </div>
@@ -314,24 +314,24 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   <div className="flex items-center gap-3.5">
                     {/* # STA */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-emerald-800 uppercase whitespace-nowrap"># STA</span>
-                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                      <span className="text-[11.5px] font-black text-emerald-800 uppercase whitespace-nowrap"># STA</span>
+                      <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                         {formatTime4(data.sta || '')}
                       </span>
                     </div>
 
                     {/* # C/ON */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-emerald-800 uppercase whitespace-nowrap"># C/ON</span>
-                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                      <span className="text-[11.5px] font-black text-emerald-800 uppercase whitespace-nowrap"># C/ON</span>
+                      <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                         {formatTime4(data.chocksOn || '')}
                       </span>
                     </div>
 
                     {/* # DOOR OPEN */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-emerald-800 uppercase whitespace-nowrap"># DOOR OPEN</span>
-                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                      <span className="text-[11.5px] font-black text-emerald-800 uppercase whitespace-nowrap"># DOOR OPEN</span>
+                      <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                         {formatTime4(data.doorOpen || '')}
                       </span>
                     </div>
@@ -340,7 +340,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
 
                 {/* Arrival Status Badge: Early = Green, On Time = Yellow, Late/Delay = Red */}
                 <div
-                  className={`px-3 py-2 rounded-xl border-2 flex items-center justify-between gap-2 font-black text-xs tracking-wide shadow-sm uppercase ${
+                  className={`px-3 py-2 rounded-xl border-2 flex items-center justify-between gap-2 font-black text-[13.5px] tracking-wide shadow-sm uppercase ${
                     isArrivalLate
                       ? 'bg-red-100/95 text-red-600 border-red-500 font-black'
                       : isArrivalEarly
@@ -363,13 +363,13 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
               </div>
 
               {/* MIDDLE PART: DEPARTURE INFORMATION (Soft Sky/Blue Tint Background) */}
-              <div className="bg-gradient-to-br from-sky-50 via-blue-50/90 to-indigo-100/75 rounded-2xl p-3 border-2 border-sky-500/60 shadow-sm flex flex-col justify-between gap-2.5">
+              <div className="bg-gradient-to-br from-sky-50 via-blue-50/90 to-indigo-100/75 rounded-2xl p-3.5 border-2 border-sky-500/60 shadow-sm flex flex-col justify-between gap-2.5">
                 <div className="flex items-center justify-between border-b border-sky-200/80 pb-2">
                   <div className="flex items-center gap-1.5">
                     <div className="w-7 h-7 rounded-lg bg-sky-700 text-white flex items-center justify-center shadow shrink-0">
                       <Clock className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-black text-sky-950 tracking-wider uppercase whitespace-nowrap">
+                    <span className="text-[13px] font-black text-sky-950 tracking-wider uppercase whitespace-nowrap">
                       DEPARTURE
                     </span>
                   </div>
@@ -377,32 +377,32 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   <div className="flex items-center gap-3">
                     {/* # STD */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># STD</span>
-                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                      <span className="text-[11.5px] font-black text-sky-800 uppercase whitespace-nowrap"># STD</span>
+                      <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                         {formatTime4(data.std)}
                       </span>
                     </div>
 
                     {/* # D/C (DOOR CLOSED) */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># D/C</span>
-                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                      <span className="text-[11.5px] font-black text-sky-800 uppercase whitespace-nowrap"># D/C</span>
+                      <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                         {formatTime4(data.doorClosed)}
                       </span>
                     </div>
 
                     {/* # C/OFF (CHOCKS OFF) */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># C/OFF</span>
-                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                      <span className="text-[11.5px] font-black text-sky-800 uppercase whitespace-nowrap"># C/OFF</span>
+                      <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                         {formatTime4(data.chocksOff)}
                       </span>
                     </div>
 
                     {/* # A/B (AIRBORNE) */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># A/B</span>
-                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                      <span className="text-[11.5px] font-black text-sky-800 uppercase whitespace-nowrap"># A/B</span>
+                      <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
                         {formatTime4(data.airborne)}
                       </span>
                     </div>
@@ -411,7 +411,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
 
                 {/* Departure Status Badge: Early = Green, On Time = Yellow, Delay = Red */}
                 <div
-                  className={`px-3 py-2 rounded-xl border-2 flex items-center justify-between gap-2 font-black text-xs tracking-wide shadow-sm uppercase ${
+                  className={`px-3 py-2 rounded-xl border-2 flex items-center justify-between gap-2 font-black text-[13.5px] tracking-wide shadow-sm uppercase ${
                     isDelayed
                       ? 'bg-red-100/95 text-red-600 border-red-500 font-black'
                       : isEarly
@@ -434,74 +434,74 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
               </div>
 
               {/* RIGHT PART: GROUND TIME (Arrival C/ON to Departure C/OFF) */}
-              <div className="bg-gradient-to-br from-violet-50 via-purple-50/90 to-indigo-100/80 rounded-2xl p-3 border-2 border-violet-500/60 shadow-sm flex flex-col justify-between gap-2.5">
+              <div className="bg-gradient-to-br from-violet-50 via-purple-50/90 to-indigo-100/80 rounded-2xl p-3.5 border-2 border-violet-500/60 shadow-sm flex flex-col justify-between gap-2.5">
                 <div className="flex flex-col items-center justify-center border-b border-violet-200/80 pb-2">
                   <div className="flex items-center gap-1.5">
                     <div className="w-7 h-7 rounded-lg bg-violet-700 text-white flex items-center justify-center shadow shrink-0">
                       <Clock className="w-4 h-4" />
                     </div>
-                    <span className="text-[11px] font-black text-violet-900 tracking-wider uppercase whitespace-nowrap">
+                    <span className="text-xs font-black text-violet-900 tracking-wider uppercase whitespace-nowrap">
                       GROUND TIME
                     </span>
                   </div>
-                  <span className="text-[10px] font-black text-violet-800 uppercase mt-1 whitespace-nowrap">
+                  <span className="text-[11px] font-black text-violet-800 uppercase mt-1 whitespace-nowrap">
                     # C/ON &rarr; C/OFF
                   </span>
                 </div>
 
-                <div className="px-2.5 py-1.5 rounded-xl border-2 border-violet-500 bg-violet-100/95 flex items-center justify-center shadow-sm">
-                  <span className="text-lg font-black text-violet-950 tracking-wider leading-tight whitespace-nowrap">
+                <div className="px-2.5 py-2 rounded-xl border-2 border-violet-500 bg-violet-100/95 flex items-center justify-center shadow-sm">
+                  <span className="text-xl font-black text-violet-950 tracking-wider leading-tight whitespace-nowrap">
                     {groundTimeDisplay}
                   </span>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="bg-gradient-to-r from-sky-100/95 via-sky-50/95 to-blue-100/90 rounded-2xl p-3.5 mt-3 border-2 border-sky-400/70 shadow-md flex justify-between items-center px-5 uppercase">
-              <div className="flex items-center gap-3.5">
+            <div className="bg-gradient-to-r from-sky-100/95 via-sky-50/95 to-blue-100/90 rounded-2xl p-4 mt-3.5 border-2 border-sky-400/70 shadow-md flex justify-between items-center px-5 uppercase">
+              <div className="flex items-center gap-4">
                 {/* Modern Icon + Title Badge */}
-                <div className="flex items-center gap-2.5 pr-3 border-r-2 border-sky-300/70">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-600 to-blue-700 text-white flex items-center justify-center shadow-md">
+                <div className="flex items-center gap-2.5 pr-3.5 border-r-2 border-sky-300/70">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-600 to-blue-700 text-white flex items-center justify-center shadow-md">
                     <Clock className="w-5 h-5" />
                   </div>
                   <div className="flex flex-col leading-tight">
-                    <span className="text-[9px] font-extrabold text-sky-700 tracking-widest">
+                    <span className="text-[11px] font-extrabold text-sky-700 tracking-widest">
                       FLIGHT TIMING
                     </span>
-                    <span className="text-xs font-black text-sky-950 tracking-wider">
+                    <span className="text-sm font-black text-sky-950 tracking-wider">
                       DEPARTURE
                     </span>
                   </div>
                 </div>
 
                 {/* STD */}
-                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-3.5 py-1.5 shadow-sm flex flex-col items-center min-w-[74px]">
-                  <span className="text-[10px] font-black text-sky-800 uppercase tracking-wider"># STD</span>
-                  <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
+                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-4 py-1.5 shadow-sm flex flex-col items-center min-w-[82px]">
+                  <span className="text-xs font-black text-sky-800 uppercase tracking-wider"># STD</span>
+                  <span className="text-2xl font-black text-slate-950 tracking-wider leading-tight">
                     {formatTime4(data.std)}
                   </span>
                 </div>
 
                 {/* D/C */}
-                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-3.5 py-1.5 shadow-sm flex flex-col items-center min-w-[74px]">
-                  <span className="text-[10px] font-black text-sky-800 uppercase tracking-wider"># D/C</span>
-                  <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
+                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-4 py-1.5 shadow-sm flex flex-col items-center min-w-[82px]">
+                  <span className="text-xs font-black text-sky-800 uppercase tracking-wider"># D/C</span>
+                  <span className="text-2xl font-black text-slate-950 tracking-wider leading-tight">
                     {formatTime4(data.doorClosed)}
                   </span>
                 </div>
 
                 {/* C/OFF */}
-                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-3.5 py-1.5 shadow-sm flex flex-col items-center min-w-[74px]">
-                  <span className="text-[10px] font-black text-sky-800 uppercase tracking-wider"># C/OFF</span>
-                  <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
+                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-4 py-1.5 shadow-sm flex flex-col items-center min-w-[82px]">
+                  <span className="text-xs font-black text-sky-800 uppercase tracking-wider"># C/OFF</span>
+                  <span className="text-2xl font-black text-slate-950 tracking-wider leading-tight">
                     {formatTime4(data.chocksOff)}
                   </span>
                 </div>
 
                 {/* A/B */}
-                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-3.5 py-1.5 shadow-sm flex flex-col items-center min-w-[74px]">
-                  <span className="text-[10px] font-black text-sky-800 uppercase tracking-wider"># A/B</span>
-                  <span className="text-xl font-black text-slate-950 tracking-wider leading-tight">
+                <div className="bg-white/90 border border-sky-200/90 rounded-xl px-4 py-1.5 shadow-sm flex flex-col items-center min-w-[82px]">
+                  <span className="text-xs font-black text-sky-800 uppercase tracking-wider"># A/B</span>
+                  <span className="text-2xl font-black text-slate-950 tracking-wider leading-tight">
                     {formatTime4(data.airborne)}
                   </span>
                 </div>
@@ -509,7 +509,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
 
               {/* Status Badge: Early = Green, On Time = Yellow, Delay = Red */}
               <div
-                className={`px-5 py-2.5 rounded-xl border-2 flex items-center gap-2.5 font-black text-xs md:text-sm tracking-wide shadow-sm uppercase ${
+                className={`px-5 py-2.5 rounded-xl border-2 flex items-center gap-2.5 font-black text-[15px] tracking-wide shadow-sm uppercase ${
                   isDelayed
                     ? 'bg-red-100/95 text-red-600 border-red-500 font-black'
                     : isEarly
@@ -517,7 +517,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     : 'bg-amber-100/95 text-amber-600 border-amber-400 font-black'
                 }`}
               >
-                <Plane className="w-4 h-4" />
+                <Plane className="w-5 h-5" />
                 <span className="font-black">{statusUpper}</span>
                 {isDelayed ? (
                   <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -531,21 +531,21 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
           )}
 
           {/* ROW 3: THREE FLIGHT DATA BOXES (LOAD SUMMARY, SPECIAL HANDLING, STAFF DETAILS) - HIGHLIGHTED & BOLD */}
-          <div className="grid grid-cols-3 gap-4 mt-3 uppercase">
+          <div className="grid grid-cols-3 gap-4 mt-3.5 uppercase">
             {/* BOX 1: LOAD SUMMARY */}
             <div className="bg-white rounded-2xl border-2 border-cyan-700/30 shadow-md overflow-hidden flex flex-col">
-              <div className="bg-gradient-to-r from-[#085f75] to-[#0e7490] text-white px-4 py-2.5 flex items-center gap-2 font-black text-xs md:text-[13px] uppercase tracking-wider shadow-sm">
+              <div className="bg-gradient-to-r from-[#085f75] to-[#0e7490] text-white px-4 py-2.5 flex items-center gap-2 font-black text-[14.5px] uppercase tracking-wider shadow-sm">
                 <Weight className="w-4 h-4 text-cyan-200" />
                 <span className="font-extrabold tracking-wide">LOAD SUMMARY</span>
               </div>
 
-              <div className="p-4 space-y-2.5 text-xs md:text-[12.5px] font-bold">
+              <div className="p-4 space-y-2.5 text-[14px] font-bold">
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
                     <Fuel className="w-4 h-4 text-cyan-700" />
                     FUEL
                   </span>
-                  <span className="font-black text-slate-950 text-sm tracking-tight">{fuelDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px] tracking-tight">{fuelDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -553,7 +553,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Users className="w-4 h-4 text-cyan-700" />
                     PASSENGERS
                   </span>
-                  <span className="font-black text-slate-950 text-sm tracking-tight">{paxDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px] tracking-tight">{paxDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -561,7 +561,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Luggage className="w-4 h-4 text-cyan-700" />
                     BAGGAGE
                   </span>
-                  <span className="font-black text-slate-950 text-sm tracking-tight">{bagDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px] tracking-tight">{bagDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -569,7 +569,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Package className="w-4 h-4 text-cyan-700" />
                     CARGO
                   </span>
-                  <span className="font-black text-slate-950 text-sm tracking-tight">{cargoDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px] tracking-tight">{cargoDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -577,7 +577,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Mail className="w-4 h-4 text-cyan-700" />
                     MAIL
                   </span>
-                  <span className="font-black text-slate-950 text-sm tracking-tight">{mailDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px] tracking-tight">{mailDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -585,7 +585,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Shield className="w-4 h-4 text-cyan-700" />
                     FIRE ARMS
                   </span>
-                  <span className="font-black text-slate-950 text-sm tracking-tight">{fireArmsDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px] tracking-tight">{fireArmsDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center pt-0.5">
@@ -593,7 +593,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <AlertTriangle className="w-4 h-4 text-red-600" />
                     COUNTER NOSHOW
                   </span>
-                  <span className="font-black text-red-600 text-sm tracking-tight">
+                  <span className="font-black text-red-600 text-[15.5px] tracking-tight">
                     {counterNoshowDisplay}
                   </span>
                 </div>
@@ -602,18 +602,18 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
 
             {/* BOX 2: SPECIAL HANDLING */}
             <div className="bg-white rounded-2xl border-2 border-teal-700/30 shadow-md overflow-hidden flex flex-col">
-              <div className="bg-gradient-to-r from-[#0b635c] to-[#0f766e] text-white px-4 py-2.5 flex items-center gap-2 font-black text-xs md:text-[13px] uppercase tracking-wider shadow-sm">
+              <div className="bg-gradient-to-r from-[#0b635c] to-[#0f766e] text-white px-4 py-2.5 flex items-center gap-2 font-black text-[14.5px] uppercase tracking-wider shadow-sm">
                 <Settings className="w-4 h-4 text-teal-200" />
                 <span className="font-extrabold tracking-wide">SPECIAL HANDLING</span>
               </div>
 
-              <div className="p-4 space-y-2.5 text-xs md:text-[12.5px] font-bold">
+              <div className="p-4 space-y-2.5 text-[14px] font-bold">
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
                     <Star className="w-4 h-4 text-teal-700" />
                     VIP
                   </span>
-                  <span className="font-black text-slate-950 text-sm">{vipDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px]">{vipDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -621,7 +621,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Accessibility className="w-4 h-4 text-teal-700" />
                     CIP
                   </span>
-                  <span className="font-black text-slate-950 text-sm">{cipDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px]">{cipDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -629,7 +629,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Users className="w-4 h-4 text-teal-700" />
                     MAAS
                   </span>
-                  <span className="font-black text-slate-950 text-sm">{maasDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px]">{maasDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -637,7 +637,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Accessibility className="w-4 h-4 text-teal-700" />
                     WCHR
                   </span>
-                  <span className="font-black text-slate-950 text-sm">{wchrDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px]">{wchrDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
@@ -645,7 +645,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <Accessibility className="w-4 h-4 text-teal-700" />
                     WCHC
                   </span>
-                  <span className="font-black text-slate-950 text-sm">{wchcDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px]">{wchcDisplay}</span>
                 </div>
 
                 <div className="flex justify-between items-center pt-0.5">
@@ -653,43 +653,43 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     <UserCheck className="w-4 h-4 text-teal-700" />
                     UM PAX
                   </span>
-                  <span className="font-black text-slate-950 text-sm">{umPaxDisplay}</span>
+                  <span className="font-black text-slate-950 text-[15.5px]">{umPaxDisplay}</span>
                 </div>
               </div>
             </div>
 
             {/* BOX 3: STAFF DETAILS */}
             <div className="bg-white rounded-2xl border-2 border-indigo-700/30 shadow-md overflow-hidden flex flex-col">
-              <div className="bg-gradient-to-r from-[#372f9d] to-[#4338ca] text-white px-4 py-2.5 flex items-center gap-2 font-black text-xs md:text-[13px] uppercase tracking-wider shadow-sm">
+              <div className="bg-gradient-to-r from-[#372f9d] to-[#4338ca] text-white px-4 py-2.5 flex items-center gap-2 font-black text-[14.5px] uppercase tracking-wider shadow-sm">
                 <Users className="w-4 h-4 text-indigo-200" />
                 <span className="font-extrabold tracking-wide">STAFF DETAILS</span>
               </div>
 
-              <div className="p-4 space-y-3 text-xs md:text-[12.5px] font-bold">
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                  <span className="text-slate-700 font-extrabold">LOAD CONTROL</span>
-                  <span className="font-black text-slate-950 uppercase text-sm">
+              <div className="p-4 space-y-3 text-[14px] font-bold">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-2 gap-2">
+                  <span className="text-slate-700 font-extrabold shrink-0">LOAD CONTROL</span>
+                  <span className="font-black text-slate-950 uppercase text-[15.5px] text-right">
                     {loadControllerValue}
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                  <span className="text-slate-700 font-extrabold">RAMP OFFICER</span>
-                  <span className="font-black text-slate-950 uppercase text-sm">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-2 gap-2">
+                  <span className="text-slate-700 font-extrabold shrink-0">RAMP OFFICER</span>
+                  <span className="font-black text-slate-950 uppercase text-[15.5px] text-right">
                     {rampOfficerValue}
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                  <span className="text-slate-700 font-extrabold">CHECK IN STAFF</span>
-                  <span className="font-black text-slate-950 uppercase truncate max-w-[145px] text-sm">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-2 gap-2">
+                  <span className="text-slate-700 font-extrabold shrink-0">CHECK IN STAFF</span>
+                  <span className="font-black text-slate-950 uppercase text-[15.5px] text-right break-words max-w-[175px]">
                     {checkInStaffValue}
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center pt-0.5">
-                  <span className="text-slate-700 font-extrabold">REPORT BY</span>
-                  <span className="font-black text-indigo-800 uppercase text-sm">
+                <div className="flex justify-between items-center pt-0.5 gap-2">
+                  <span className="text-slate-700 font-extrabold shrink-0">REPORT BY</span>
+                  <span className="font-black text-indigo-800 uppercase text-[15.5px] text-right">
                     {(user.userName || 'N/A').toUpperCase()}
                   </span>
                 </div>
@@ -699,22 +699,22 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
 
           {/* DEDICATED REMARKS BOX WITH NOSHOW PNR (SHOWN AFTER REMARKS) */}
           {hasRemarksContent && (
-            <div className="mt-3 bg-gradient-to-r from-amber-50 to-amber-100/90 border-2 border-amber-400 rounded-2xl p-3.5 shadow-md flex items-start gap-3 uppercase">
+            <div className="mt-3.5 bg-gradient-to-r from-amber-50 to-amber-100/90 border-2 border-amber-400 rounded-2xl p-4 shadow-md flex items-start gap-3 uppercase">
               <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                 <MessageSquare className="w-4 h-4 font-black" />
               </div>
               <div className="flex-1 space-y-1">
-                <span className="font-black text-amber-950 uppercase text-xs tracking-wider block">
+                <span className="font-black text-amber-950 uppercase text-sm tracking-wider block">
                   REMARKS:
                 </span>
                 {hasValidRemarks && (
-                  <p className="font-black text-slate-950 text-xs md:text-sm tracking-wide leading-snug uppercase m-0">
+                  <p className="font-black text-slate-950 text-[15px] tracking-wide leading-snug uppercase m-0">
                     {data.remarks.trim().toUpperCase()}
                   </p>
                 )}
                 {hasValidNoshowPnr && (
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-lg bg-red-100 border border-red-300 font-black text-red-900 text-xs tracking-wider">
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="px-3 py-0.5 rounded-lg bg-red-100 border border-red-300 font-black text-red-900 text-sm tracking-wider">
                       NOSHOW PNR: {data.noshowPnr!.trim().toUpperCase()}
                     </span>
                   </div>
@@ -724,7 +724,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
           )}
 
           {/* BOTTOM RIBBON BANNER */}
-          <div className="mt-4 rounded-xl bg-gradient-to-r from-[#003b6d] via-[#025a9e] to-[#003b6d] text-white py-2 px-6 text-center font-black tracking-widest text-xs uppercase shadow flex items-center justify-center gap-3">
+          <div className="mt-4 rounded-xl bg-gradient-to-r from-[#003b6d] via-[#025a9e] to-[#003b6d] text-white py-2.5 px-6 text-center font-black tracking-widest text-sm uppercase shadow flex items-center justify-center gap-3">
             <span className="w-8 h-0.5 bg-sky-300 inline-block" />
             <span>REGARDS FROM TEAM {originCode}</span>
             <span className="w-8 h-0.5 bg-sky-300 inline-block" />

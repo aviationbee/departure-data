@@ -285,8 +285,19 @@ export const AdminModule: React.FC<Props> = ({
     ];
 
     const escapeCsv = (val: string | number | undefined) => {
-      const str = String(val ?? '').replace(/"/g, '""');
+      const raw = String(val ?? '');
+      if (raw.startsWith('="') && raw.endsWith('"')) {
+        const inner = raw.slice(2, -1).replace(/"/g, '""');
+        return `="${inner}"`;
+      }
+      const str = raw.replace(/"/g, '""');
       return `"${str}"`;
+    };
+
+    // Force Excel to treat CREW CONFIG (e.g. 2/2, 2/5) as Text instead of converting to Date (2-Feb)
+    const toExcelTextMode = (val: string | undefined) => {
+      const clean = String(val ?? '').trim();
+      return clean ? `="${clean}"` : '';
     };
 
     const rows = filteredReports.map((r) => [
@@ -297,7 +308,7 @@ export const AdminModule: React.FC<Props> = ({
       r.acReg,
       r.acType,
       r.captain,
-      r.configure,
+      toExcelTextMode(r.configure),
       r.sta,
       r.chocksOn,
       r.doorOpen,

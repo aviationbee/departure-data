@@ -1266,7 +1266,7 @@ export default function App() {
                   ref={configureInputRef}
                   data-mandatory-key="configure"
                   type="text"
-                  placeholder="2/5"
+                  placeholder="2/2"
                   value={formData.configure}
                   onChange={(e) => setFormData({ ...formData, configure: e.target.value.toUpperCase() })}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
