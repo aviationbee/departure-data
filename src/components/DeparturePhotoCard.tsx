@@ -90,6 +90,13 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const wchcDisplay = formatFig(data.wchcFig, data.wchcSeat);
   const umPaxDisplay = formatFig(data.umPax);
   const fireArmsDisplay = isZeroOrEmpty(data.fireArms) ? 'NIL' : data.fireArms.trim().toUpperCase();
+  const counterNoshowNum = parseInt(data.counterNoshow, 10);
+  const counterNoshowDisplay =
+    !isNaN(counterNoshowNum) && counterNoshowNum > 0
+      ? String(counterNoshowNum).padStart(2, '0')
+      : isZeroOrEmpty(data.counterNoshow)
+      ? 'NIL'
+      : data.counterNoshow.trim().toUpperCase();
 
   // Staff & Captain Values
   const captainDisplay = isZeroOrEmpty(data.captain) ? 'NIL' : data.captain.trim().toUpperCase();
@@ -573,12 +580,22 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   <span className="font-black text-slate-950 text-sm tracking-tight">{mailDisplay}</span>
                 </div>
 
-                <div className="flex justify-between items-center pt-0.5">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <span className="text-slate-700 flex items-center gap-2 font-extrabold">
                     <Shield className="w-4 h-4 text-cyan-700" />
                     FIRE ARMS
                   </span>
                   <span className="font-black text-slate-950 text-sm tracking-tight">{fireArmsDisplay}</span>
+                </div>
+
+                <div className="flex justify-between items-center pt-0.5">
+                  <span className="text-red-600 flex items-center gap-2 font-extrabold">
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                    COUNTER NOSHOW
+                  </span>
+                  <span className="font-black text-red-600 text-sm tracking-tight">
+                    {counterNoshowDisplay}
+                  </span>
                 </div>
               </div>
             </div>

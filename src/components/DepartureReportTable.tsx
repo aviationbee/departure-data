@@ -35,10 +35,33 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
   }
   const offloadString = offloadParts.length > 0 ? offloadParts.join(', ').toUpperCase() : 'NIL';
 
-  // NOSHOW PNR: Use explicit input box if filled, else check remarks or NIL
-  const noshowValue = data.noshowPnr && data.noshowPnr.trim()
-    ? data.noshowPnr.trim().toUpperCase()
-    : 'NIL';
+  // Helper: treat empty, '0', '00', 'NIL', 'N/A' as empty
+  const isZeroOrEmpty = (val?: string): boolean => {
+    if (!val) return true;
+    const trimmed = val.trim().toUpperCase();
+    if (trimmed === '' || trimmed === 'NIL' || trimmed === 'N/A' || trimmed === '-') return true;
+    if (/^0+$/.test(trimmed)) return true;
+    return false;
+  };
+
+  // NOSHOW: Combine Counter Noshow figure and Noshow PNR if present
+  const hasCounterNoshow = !isZeroOrEmpty(data.counterNoshow);
+  const hasNoshowPnr = !isZeroOrEmpty(data.noshowPnr);
+  const counterNoshowFormatted = hasCounterNoshow
+    ? !isNaN(parseInt(data.counterNoshow, 10))
+      ? String(parseInt(data.counterNoshow, 10)).padStart(2, '0')
+      : data.counterNoshow.trim().toUpperCase()
+    : '';
+  const noshowPnrFormatted = hasNoshowPnr ? data.noshowPnr.trim().toUpperCase() : '';
+
+  const noshowValue =
+    hasCounterNoshow && hasNoshowPnr
+      ? `${counterNoshowFormatted} (${noshowPnrFormatted})`
+      : hasCounterNoshow
+      ? counterNoshowFormatted
+      : hasNoshowPnr
+      ? noshowPnrFormatted
+      : 'NIL';
 
   const fireArmsValue = data.fireArms && data.fireArms.trim() ? data.fireArms.toUpperCase() : 'NIL';
   const checkInStaffValue = (data.checkInStaff || data.checkInStuff || 'N/A').toUpperCase();

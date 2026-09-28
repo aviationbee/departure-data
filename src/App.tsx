@@ -24,6 +24,7 @@ import {
 import { generateFlightDepartureMessage, parseFlstMessage } from './utils/reportGenerators';
 import { DepartureReportTable } from './components/DepartureReportTable';
 import { DeparturePhotoCard } from './components/DeparturePhotoCard';
+import { MassFormModule } from './components/MassFormModule';
 import {
   Plane,
   Printer,
@@ -640,18 +641,18 @@ export default function App() {
             <div className="flex flex-col gap-4 max-w-sm mx-auto">
               <button
                 onClick={() => goToDataPage('data-dom', 'dom')}
-                className="py-4 px-6 rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-sky-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-sky-400/30 flex items-center justify-center gap-3 cursor-pointer"
+                className="py-4 px-6 rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-sky-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-sky-400/30 flex items-center justify-center gap-3 cursor-pointer uppercase"
               >
                 <Navigation className="w-5 h-5 text-sky-200" />
-                <span>DOMESTIC</span>
+                <span>FLIGHT DATA</span>
               </button>
 
               <button
-                onClick={() => goToDataPage('data-intl', 'intl')}
-                className="py-4 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-purple-400/30 flex items-center justify-center gap-3 cursor-pointer"
+                onClick={() => setCurrentPage('mass-login')}
+                className="py-4 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-purple-400/30 flex items-center justify-center gap-3 cursor-pointer uppercase"
               >
-                <Globe className="w-5 h-5 text-purple-200" />
-                <span>INTERNATIONAL</span>
+                <FileText className="w-5 h-5 text-purple-200" />
+                <span>MASS FORM</span>
               </button>
 
               <button
@@ -674,9 +675,7 @@ export default function App() {
             <div className="flex flex-col sm:flex-row justify-between items-center pb-5 mb-6 border-b border-slate-800 gap-4">
               <div className="flex flex-col items-center sm:items-start">
                 <h1 className="text-xl md:text-2xl font-bold tracking-wider text-amber-400 uppercase">
-                  {currentPage === 'data-intl'
-                    ? 'ENTER FLIGHT DATA (INTERNATIONAL)'
-                    : 'ENTER FLIGHT DATA (DOMESTIC)'}
+                  ENTER FLIGHT DATA
                 </h1>
 
                 {/* Typewriter Animated Subtitle */}
@@ -1211,18 +1210,6 @@ export default function App() {
                 />
               </div>
 
-              {/* COUNTER NOSHOW */}
-              <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">COUNTER NOSHOW</label>
-                <input
-                  type="number"
-                  placeholder="Pax Figure"
-                  value={formData.counterNoshow}
-                  onChange={(e) => setFormData({ ...formData, counterNoshow: e.target.value })}
-                  className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm"
-                />
-              </div>
-
               {/* GATE NO SHOW */}
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">GATE NO SHOW</label>
@@ -1357,45 +1344,49 @@ export default function App() {
                 />
               </div>
 
-              {/* WCHR & WCHC */}
-              <div className="flex flex-col md:col-span-2">
+              {/* WCHR */}
+              <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">
-                  WHEELCHAIR (WCHR / WCHC)
+                  WCHR
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="flex gap-1.5">
-                    <input
-                      type="number"
-                      placeholder="WCHR Fig"
-                      value={formData.wchrFig}
-                      onChange={(e) => setFormData({ ...formData, wchrFig: e.target.value })}
-                      className="w-24 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Seat No (E.G. 2A, 3A)"
-                      value={formData.wchrSeat}
-                      onChange={(e) => setFormData({ ...formData, wchrSeat: e.target.value.toUpperCase() })}
-                      className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
-                    />
-                  </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    placeholder="WCHR Fig"
+                    value={formData.wchrFig}
+                    onChange={(e) => setFormData({ ...formData, wchrFig: e.target.value })}
+                    className="w-24 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Seat No (E.G. 2A, 3A)"
+                    value={formData.wchrSeat}
+                    onChange={(e) => setFormData({ ...formData, wchrSeat: e.target.value.toUpperCase() })}
+                    className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
+                  />
+                </div>
+              </div>
 
-                  <div className="flex gap-1.5">
-                    <input
-                      type="number"
-                      placeholder="WCHC Fig"
-                      value={formData.wchcFig}
-                      onChange={(e) => setFormData({ ...formData, wchcFig: e.target.value })}
-                      className="w-24 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Seat No (E.G. 2A)"
-                      value={formData.wchcSeat}
-                      onChange={(e) => setFormData({ ...formData, wchcSeat: e.target.value.toUpperCase() })}
-                      className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
-                    />
-                  </div>
+              {/* WCHC */}
+              <div className="flex flex-col">
+                <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">
+                  WCHC
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    placeholder="WCHC Fig"
+                    value={formData.wchcFig}
+                    onChange={(e) => setFormData({ ...formData, wchcFig: e.target.value })}
+                    className="w-24 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Seat No (E.G. 2A)"
+                    value={formData.wchcSeat}
+                    onChange={(e) => setFormData({ ...formData, wchcSeat: e.target.value.toUpperCase() })}
+                    className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
+                  />
                 </div>
               </div>
 
@@ -1453,7 +1444,21 @@ export default function App() {
                 />
               </div>
 
-              {/* NOSHOW PNR (AFTER PAX HANDLING) */}
+              {/* NOSHOW FIGURE (COUNTER) (BEFORE NOSHOW PNR) */}
+              <div className="flex flex-col">
+                <label className="font-bold text-rose-400 mb-1 tracking-wider uppercase">
+                  NOSHOW FIGURE (COUNTER)
+                </label>
+                <input
+                  type="number"
+                  placeholder="ENTER COUNTER NOSHOW FIGURE"
+                  value={formData.counterNoshow}
+                  onChange={(e) => setFormData({ ...formData, counterNoshow: e.target.value })}
+                  className="p-2.5 border border-rose-500/50 rounded-xl bg-slate-800/90 text-white focus:border-rose-400 focus:outline-none text-sm uppercase"
+                />
+              </div>
+
+              {/* NOSHOW PNR */}
               <div className="flex flex-col">
                 <label className="font-bold text-amber-300 mb-1 tracking-wider uppercase">NOSHOW PNR</label>
                 <input
@@ -1648,6 +1653,19 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ================= MASS FORM PAGES ================= */}
+      {(currentPage === 'mass-login' ||
+        currentPage === 'mass-dashboard' ||
+        currentPage === 'mass-history' ||
+        currentPage === 'mass-report') && (
+        <MassFormModule
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          userInfo={userInfo}
+          showToast={showToast}
+        />
       )}
 
       {/* Delay Warning Modal Popup */}

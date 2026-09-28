@@ -131,4 +131,33 @@
     line-height: 1.25 !important;
     color: #000000 !important;
   }
+
+  /* MASS FORM Report Multi-Page Print Styling */
+  .mass-report-wrapper {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    display: block !important;
+  }
+
+  .mass-report-page {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .mass-report-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
 }

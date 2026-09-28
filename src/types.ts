@@ -85,4 +85,8 @@ export type PageMode =
   | 'welcome'
   | 'data-intl'
   | 'data-dom'
-  | 'dual-report';
+  | 'dual-report'
+  | 'mass-login'
+  | 'mass-dashboard'
+  | 'mass-history'
+  | 'mass-report';
