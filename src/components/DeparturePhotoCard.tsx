@@ -383,7 +383,15 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                       </span>
                     </div>
 
-                    {/* # C/OFF */}
+                    {/* # D/C (DOOR CLOSED) */}
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># D/C</span>
+                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
+                        {formatTime4(data.doorClosed)}
+                      </span>
+                    </div>
+
+                    {/* # C/OFF (CHOCKS OFF) */}
                     <div className="flex flex-col items-center">
                       <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># C/OFF</span>
                       <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
@@ -391,17 +399,9 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                       </span>
                     </div>
 
-                    {/* # DOOR CLOSED */}
+                    {/* # A/B (AIRBORNE) */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># DOOR CLOSED</span>
-                      <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
-                        {formatTime4(data.doorClosed)}
-                      </span>
-                    </div>
-
-                    {/* # AIRBORNE */}
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># AIRBORNE</span>
+                      <span className="text-[10px] font-black text-sky-800 uppercase whitespace-nowrap"># A/B</span>
                       <span className="text-lg font-black text-slate-950 tracking-wider leading-tight">
                         {formatTime4(data.airborne)}
                       </span>
