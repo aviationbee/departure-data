@@ -30,6 +30,7 @@ import {
   saveFlightReportToCloud,
   logUserActivity,
   subscribeToSystemNotice,
+  syncRealtimeDataOnActivity,
   SystemNoticeDoc,
 } from './firebase';
 import {
@@ -323,13 +324,41 @@ export default function App() {
     showToast('LOGGED OUT SUCCESSFULLY.');
   };
 
-  // Real-time subscription to Super Admin Notice (no page refresh required)
+  // Real-time subscription to Super Admin Notice + Activity-Triggered Instant Cloud Sync (no page refresh required)
   useEffect(() => {
     const unsub = subscribeToSystemNotice((notice) => {
       setLiveNotice(notice);
     });
-    return () => unsub();
+
+    // Trigger immediate sync on mount
+    syncRealtimeDataOnActivity(true);
+
+    // Sync whenever user performs any activity in the app
+    const handleUserActivitySync = () => {
+      syncRealtimeDataOnActivity(false);
+    };
+
+    const activityEvents = ['click', 'keydown', 'touchstart', 'focus', 'visibilitychange'];
+    activityEvents.forEach((ev) =>
+      window.addEventListener(ev, handleUserActivitySync, { passive: true })
+    );
+
+    // Continuous 4-second background heartbeat sync
+    const syncTimer = window.setInterval(() => {
+      syncRealtimeDataOnActivity(false);
+    }, 4000);
+
+    return () => {
+      unsub();
+      activityEvents.forEach((ev) => window.removeEventListener(ev, handleUserActivitySync));
+      window.clearInterval(syncTimer);
+    };
   }, []);
+
+  // Also force real-time sync whenever user switches pages inside the app
+  useEffect(() => {
+    syncRealtimeDataOnActivity(true);
+  }, [currentPage]);
 
   // 2-Hour Inactivity Auto-Logout (7,200,000 ms)
   useEffect(() => {

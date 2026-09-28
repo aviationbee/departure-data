@@ -1,11 +1,13 @@
 import { initializeApp } from 'firebase/app';
 import {
-  getFirestore,
+  initializeFirestore,
   collection,
   doc,
   setDoc,
   addDoc,
   deleteDoc,
+  getDoc,
+  getDocs,
   onSnapshot,
   query,
   orderBy,
@@ -14,9 +16,66 @@ import {
 import firebaseConfig from '../firebase-applet-config.json';
 import { FlightFormData, UserInfo } from './types';
 
-// Initialize Firebase App & Cloud Firestore (asia-southeast1)
+// Initialize Firebase App & Cloud Firestore (asia-southeast1) with auto long-polling detection for airport/mobile networks
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = initializeFirestore(
+  app,
+  { experimentalAutoDetectLongPolling: true },
+  firebaseConfig.firestoreDatabaseId
+);
+
+// Active subscriber registries for instant activity-based sync without page reload
+const flightReportSubscribers = new Set<(reports: StoredFlightReport[]) => void>();
+const activityLogSubscribers = new Set<(logs: ActivityLogEntry[]) => void>();
+const systemNoticeSubscribers = new Set<(notice: SystemNoticeDoc | null) => void>();
+
+let lastActivitySyncTime = 0;
+
+// Actively pull latest updates from Firestore on any user activity (without refreshing page or logging out)
+export async function syncRealtimeDataOnActivity(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && now - lastActivitySyncTime < 1500) return;
+  lastActivitySyncTime = now;
+
+  try {
+    // 1. Always sync active System Notice so popup appears immediately on any user activity
+    if (systemNoticeSubscribers.size > 0) {
+      const noticeSnap = await getDoc(doc(db, 'system_notices', 'current_notice'));
+      const noticeData = noticeSnap.exists()
+        ? ({ id: noticeSnap.id, ...(noticeSnap.data() as Omit<SystemNoticeDoc, 'id'>) } as SystemNoticeDoc)
+        : null;
+      systemNoticeSubscribers.forEach((cb) => cb(noticeData));
+    }
+
+    // 2. Sync Flight Reports if Admin Dashboard is active
+    if (flightReportSubscribers.size > 0) {
+      const qReports = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(qReports);
+      const list: StoredFlightReport[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as Omit<StoredFlightReport, 'id'>;
+        if (!data.expiresAt || data.expiresAt > now) {
+          list.push({ id: docSnap.id, ...data });
+        }
+      });
+      flightReportSubscribers.forEach((cb) => cb(list));
+    }
+
+    // 3. Sync Activity Logs if Super Admin Log Check is active
+    if (activityLogSubscribers.size > 0) {
+      const qLogs = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(500));
+      const snap = await getDocs(qLogs);
+      const list: ActivityLogEntry[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as Omit<ActivityLogEntry, 'id'>;
+        list.push({ id: docSnap.id, ...data });
+      });
+      activityLogSubscribers.forEach((cb) => cb(list));
+    }
+  } catch (err) {
+    // Silent catch on transient network hiccups
+  }
+}
 
 // Storage start date (previous dates before today are hidden in Admin calendar)
 export const STORAGE_START_DATE = '2026-09-28';
@@ -313,8 +372,9 @@ export async function circulateAdminNotice(
 export function subscribeToFlightReports(
   callback: (reports: StoredFlightReport[]) => void
 ) {
+  flightReportSubscribers.add(callback);
   const q = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'));
-  return onSnapshot(
+  const unsub = onSnapshot(
     q,
     (snapshot) => {
       const now = Date.now();
@@ -331,18 +391,23 @@ export function subscribeToFlightReports(
       console.error('Error subscribing to flight_reports:', err);
     }
   );
+  return () => {
+    flightReportSubscribers.delete(callback);
+    unsub();
+  };
 }
 
 // Subscribe to Activity Logs in real-time
 export function subscribeToActivityLogs(
   callback: (logs: ActivityLogEntry[]) => void
 ) {
+  activityLogSubscribers.add(callback);
   const q = query(
     collection(db, 'activity_logs'),
     orderBy('timestamp', 'desc'),
     limit(500)
   );
-  return onSnapshot(
+  const unsub = onSnapshot(
     q,
     (snapshot) => {
       const list: ActivityLogEntry[] = [];
@@ -356,13 +421,18 @@ export function subscribeToActivityLogs(
       console.error('Error subscribing to activity_logs:', err);
     }
   );
+  return () => {
+    activityLogSubscribers.delete(callback);
+    unsub();
+  };
 }
 
 // Subscribe to Active System Notice in real-time
 export function subscribeToSystemNotice(
   callback: (notice: SystemNoticeDoc | null) => void
 ) {
-  return onSnapshot(
+  systemNoticeSubscribers.add(callback);
+  const unsub = onSnapshot(
     doc(db, 'system_notices', 'current_notice'),
     (docSnap) => {
       if (docSnap.exists()) {
@@ -376,4 +446,8 @@ export function subscribeToSystemNotice(
       console.error('Error subscribing to system_notices:', err);
     }
   );
+  return () => {
+    systemNoticeSubscribers.delete(callback);
+    unsub();
+  };
 }
