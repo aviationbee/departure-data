@@ -218,6 +218,31 @@ export default function App() {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
   });
   const [seatWarningTarget, setSeatWarningTarget] = useState<'umPax' | 'fireArms' | 'wchr' | 'wchc' | null>(null);
+  const [missingMandatoryBox, setMissingMandatoryBox] = useState<{
+    label: string;
+    ref: React.RefObject<HTMLInputElement | null>;
+  } | null>(null);
+  const flightNoInputRef = React.useRef<HTMLInputElement>(null);
+  const acRegInputRef = React.useRef<HTMLInputElement>(null);
+  const captainInputRef = React.useRef<HTMLInputElement>(null);
+  const configureInputRef = React.useRef<HTMLInputElement>(null);
+  const staInputRef = React.useRef<HTMLInputElement>(null);
+  const chocksOnInputRef = React.useRef<HTMLInputElement>(null);
+  const doorOpenInputRef = React.useRef<HTMLInputElement>(null);
+  const stdInputRef = React.useRef<HTMLInputElement>(null);
+  const doorClosedInputRef = React.useRef<HTMLInputElement>(null);
+  const chocksOffInputRef = React.useRef<HTMLInputElement>(null);
+  const airborneInputRef = React.useRef<HTMLInputElement>(null);
+  const flightLoadInputRef = React.useRef<HTMLInputElement>(null);
+  const paxMaleInputRef = React.useRef<HTMLInputElement>(null);
+  const paxFemaleInputRef = React.useRef<HTMLInputElement>(null);
+  const paxChildInputRef = React.useRef<HTMLInputElement>(null);
+  const paxInfantInputRef = React.useRef<HTMLInputElement>(null);
+  const fuelUpliftInputRef = React.useRef<HTMLInputElement>(null);
+  const baggageWeightInputRef = React.useRef<HTMLInputElement>(null);
+  const baggagePcsInputRef = React.useRef<HTMLInputElement>(null);
+  const cargoWeightInputRef = React.useRef<HTMLInputElement>(null);
+  const cargoPcsInputRef = React.useRef<HTMLInputElement>(null);
   const delayReasonInputRef = React.useRef<HTMLInputElement>(null);
   const counterNoshowInputRef = React.useRef<HTMLInputElement>(null);
   const noshowPnrInputRef = React.useRef<HTMLInputElement>(null);
@@ -502,7 +527,120 @@ export default function App() {
     return tokens.every((t) => /^[A-Z0-9]{6}$/.test(t));
   };
 
+  const isOutstation = (userInfo.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
+
+  const getMandatoryFields = () => {
+    const list: {
+      key: string;
+      label: string;
+      value: string | undefined;
+      ref: React.RefObject<HTMLInputElement | null>;
+    }[] = [
+      { key: 'flightNo', label: 'FLIGHT NO', value: formData.flightNoSuffix, ref: flightNoInputRef },
+      { key: 'acReg', label: 'A/C REG', value: formData.acRegSuffix, ref: acRegInputRef },
+      { key: 'captain', label: 'CAPTAIN', value: formData.captain, ref: captainInputRef },
+      {
+        key: 'configure',
+        label: 'CONFIGURE / CREW COUNT',
+        value: formData.configure,
+        ref: configureInputRef,
+      },
+    ];
+
+    if (isOutstation) {
+      list.push(
+        { key: 'sta', label: 'STA (LT)', value: formData.sta, ref: staInputRef },
+        { key: 'chocksOn', label: 'C/ON (LT)', value: formData.chocksOn, ref: chocksOnInputRef },
+        { key: 'doorOpen', label: 'DOOR OPEN (LT)', value: formData.doorOpen, ref: doorOpenInputRef }
+      );
+    }
+
+    list.push(
+      { key: 'std', label: 'STD (LT)', value: formData.std, ref: stdInputRef },
+      { key: 'doorClosed', label: 'DOOR CLOSED (LT)', value: formData.doorClosed, ref: doorClosedInputRef },
+      { key: 'chocksOff', label: 'CHOCKS OFF (LT)', value: formData.chocksOff, ref: chocksOffInputRef },
+      { key: 'airborne', label: 'AIRBORNE (LT)', value: formData.airborne, ref: airborneInputRef },
+      { key: 'flightLoad', label: 'FLIGHT LOAD', value: formData.flightLoad, ref: flightLoadInputRef },
+      { key: 'paxMale', label: 'PASSENGERS (M)', value: formData.paxMale, ref: paxMaleInputRef },
+      { key: 'paxFemale', label: 'PASSENGERS (F)', value: formData.paxFemale, ref: paxFemaleInputRef },
+      { key: 'paxChild', label: 'PASSENGERS (C)', value: formData.paxChild, ref: paxChildInputRef },
+      { key: 'paxInfant', label: 'PASSENGERS (I)', value: formData.paxInfant, ref: paxInfantInputRef },
+      { key: 'fuelUplift', label: 'FUEL UPLIFT', value: formData.fuelUplift, ref: fuelUpliftInputRef },
+      {
+        key: 'baggageWeight',
+        label: 'BAGGAGE (WEIGHT KG)',
+        value: formData.baggageWeight,
+        ref: baggageWeightInputRef,
+      },
+      { key: 'baggagePcs', label: 'BAGGAGE (PCS)', value: formData.baggagePcs, ref: baggagePcsInputRef },
+      {
+        key: 'cargoWeight',
+        label: 'CARGO (WEIGHT KG)',
+        value: formData.cargoWeight,
+        ref: cargoWeightInputRef,
+      },
+      { key: 'cargoPcs', label: 'CARGO (PCS)', value: formData.cargoPcs, ref: cargoPcsInputRef }
+    );
+
+    return list;
+  };
+
+  const validateMandatoryUpTo = (
+    targetKey: string = 'ALL',
+    e?: React.FocusEvent<any> | React.MouseEvent<any>
+  ): boolean => {
+    const fields = getMandatoryFields();
+    const stopIdx =
+      targetKey === 'ALL' ? fields.length : fields.findIndex((f) => f.key === targetKey);
+    const limitIdx = stopIdx === -1 ? fields.length : stopIdx;
+    const airborneIdx = fields.findIndex((f) => f.key === 'airborne');
+
+    for (let i = 0; i < limitIdx; i++) {
+      const f = fields[i];
+      if (!f.value || f.value.trim() === '') {
+        if (e && 'target' in e && e.target && typeof (e.target as HTMLElement).blur === 'function') {
+          (e.target as HTMLElement).blur();
+        }
+        if (e && typeof e.stopPropagation === 'function') {
+          e.stopPropagation();
+        }
+        setMissingMandatoryBox({ label: f.label, ref: f.ref });
+        return false;
+      }
+      if (i === airborneIdx && limitIdx > airborneIdx) {
+        if (!validateDelayReason(e)) {
+          if (e && typeof e.stopPropagation === 'function') {
+            e.stopPropagation();
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const handleGridFocusCapture = (e: React.FocusEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
+    if ((target as HTMLInputElement).readOnly) return;
+
+    const mandatoryKey = target.getAttribute('data-mandatory-key');
+    if (mandatoryKey === 'date') return;
+    if (mandatoryKey === 'delayReason') {
+      validateMandatoryUpTo('flightLoad', e);
+      return;
+    }
+    if (mandatoryKey) {
+      validateMandatoryUpTo(mandatoryKey, e);
+      return;
+    }
+
+    // Any field after CARGO PCS validates all mandatory fields first
+    validateMandatoryUpTo('ALL', e);
+  };
+
   const handleGenerateReport = (type: 'intl' | 'dom') => {
+    if (!validateMandatoryUpTo('ALL')) return;
     if (!validateDelayReason()) return;
 
     // 1. Validate UM PAX Seat Number if UM PAX > 0
@@ -698,7 +836,6 @@ export default function App() {
     showToast('Sample flight data loaded!');
   };
 
-  const isOutstation = (userInfo.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
   const departureMessage = generateFlightDepartureMessage(formData, userInfo, reportType);
   const flstWhatsappMessage = parseFlstMessage(formData.flstRawMessage, formData);
 
@@ -955,11 +1092,15 @@ export default function App() {
             </div>
 
             {/* Inputs Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs font-sans">
+            <div
+              onFocusCapture={handleGridFocusCapture}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs font-sans"
+            >
               {/* Date */}
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">DATE</label>
                 <input
+                  data-mandatory-key="date"
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
@@ -977,6 +1118,8 @@ export default function App() {
                     BS-
                   </span>
                   <input
+                    ref={flightNoInputRef}
+                    data-mandatory-key="flightNo"
                     type="text"
                     placeholder="142"
                     value={formData.flightNoSuffix}
@@ -992,6 +1135,7 @@ export default function App() {
                   ROUTE (AUTO-SELECTED / EDITABLE)
                 </label>
                 <input
+                  data-mandatory-key="acReg"
                   type="text"
                   placeholder="AUTO-SELECTED (E.G. CXB-DAC)"
                   value={formData.route}
@@ -1010,6 +1154,8 @@ export default function App() {
                     {getRegistrationDetails(formData.acRegSuffix).prefix}
                   </span>
                   <input
+                    ref={acRegInputRef}
+                    data-mandatory-key="acReg"
                     type="text"
                     maxLength={3}
                     list="ac-reg-options"
@@ -1044,6 +1190,8 @@ export default function App() {
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">CAPTAIN</label>
                 <input
+                  ref={captainInputRef}
+                  data-mandatory-key="captain"
                   type="text"
                   list="captain-options"
                   placeholder="CAPTAIN NAME (E.G. AHMAD)"
@@ -1064,6 +1212,8 @@ export default function App() {
                   CONFIGURE / CREW COUNT
                 </label>
                 <input
+                  ref={configureInputRef}
+                  data-mandatory-key="configure"
                   type="text"
                   placeholder="2/5"
                   value={formData.configure}
@@ -1091,6 +1241,8 @@ export default function App() {
                         STA (LT)
                       </label>
                       <input
+                        ref={staInputRef}
+                        data-mandatory-key="sta"
                         type="text"
                         placeholder="1000"
                         maxLength={4}
@@ -1106,6 +1258,8 @@ export default function App() {
                         C/ON (LT)
                       </label>
                       <input
+                        ref={chocksOnInputRef}
+                        data-mandatory-key="chocksOn"
                         type="text"
                         placeholder="0950"
                         maxLength={4}
@@ -1121,6 +1275,8 @@ export default function App() {
                         DOOR OPEN (LT)
                       </label>
                       <input
+                        ref={doorOpenInputRef}
+                        data-mandatory-key="doorOpen"
                         type="text"
                         placeholder="0952"
                         maxLength={4}
@@ -1136,6 +1292,7 @@ export default function App() {
                         ARRIVAL STATUS
                       </label>
                       <input
+                        data-mandatory-key="std"
                         type="text"
                         value={formData.arrivalStatus || 'FLIGHT ON TIME ARRIVED'}
                         onChange={(e) =>
@@ -1171,6 +1328,8 @@ export default function App() {
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">STD (LT)</label>
                 <input
+                  ref={stdInputRef}
+                  data-mandatory-key="std"
                   type="text"
                   placeholder="1000"
                   maxLength={4}
@@ -1184,6 +1343,8 @@ export default function App() {
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">DOOR CLOSED (LT)</label>
                 <input
+                  ref={doorClosedInputRef}
+                  data-mandatory-key="doorClosed"
                   type="text"
                   placeholder="0958"
                   maxLength={4}
@@ -1197,6 +1358,8 @@ export default function App() {
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">CHOCKS OFF (LT)</label>
                 <input
+                  ref={chocksOffInputRef}
+                  data-mandatory-key="chocksOff"
                   type="text"
                   placeholder="0959"
                   maxLength={4}
@@ -1225,6 +1388,8 @@ export default function App() {
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">AIRBORNE (LT)</label>
                 <input
+                  ref={airborneInputRef}
+                  data-mandatory-key="airborne"
                   type="text"
                   placeholder="1010"
                   maxLength={4}
@@ -1240,6 +1405,7 @@ export default function App() {
                   DEPARTURE STATUS (CALCULATED)
                 </label>
                 <input
+                  data-mandatory-key="flightLoad"
                   type="text"
                   value={formData.departureStatus}
                   onChange={(e) => setFormData({ ...formData, departureStatus: e.target.value.toUpperCase() })}
@@ -1257,6 +1423,7 @@ export default function App() {
                   <div className="flex gap-2">
                     <input
                       ref={delayReasonInputRef}
+                      data-mandatory-key="delayReason"
                       type="text"
                       list="delay-reason-options"
                       placeholder="E.G. LAST PAX ACCEPTANCE, LATE INBOUND AIRCRAFT, ATC CLEARANCE"
@@ -1279,10 +1446,11 @@ export default function App() {
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">FLIGHT LOAD</label>
                 <input
+                  ref={flightLoadInputRef}
+                  data-mandatory-key="flightLoad"
                   type="number"
                   placeholder="Booked Pax Figure"
                   value={formData.flightLoad}
-                  onFocus={validateDelayReason}
                   onChange={(e) => setFormData({ ...formData, flightLoad: e.target.value })}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm"
                 />
@@ -1295,37 +1463,41 @@ export default function App() {
                 </label>
                 <div className="flex items-center gap-1.5 bg-slate-800/90 p-1.5 border border-slate-700 rounded-xl">
                   <input
+                    ref={paxMaleInputRef}
+                    data-mandatory-key="paxMale"
                     type="number"
                     placeholder="M"
                     value={formData.paxMale}
-                    onFocus={validateDelayReason}
                     onChange={(e) => setFormData({ ...formData, paxMale: e.target.value })}
                     className="w-16 p-2 border border-slate-600 rounded-lg text-center text-sm font-bold bg-slate-900 text-white focus:outline-none"
                   />
                   <span className="font-bold text-slate-400">+</span>
                   <input
+                    ref={paxFemaleInputRef}
+                    data-mandatory-key="paxFemale"
                     type="number"
                     placeholder="F"
                     value={formData.paxFemale}
-                    onFocus={validateDelayReason}
                     onChange={(e) => setFormData({ ...formData, paxFemale: e.target.value })}
                     className="w-16 p-2 border border-slate-600 rounded-lg text-center text-sm font-bold bg-slate-900 text-white focus:outline-none"
                   />
                   <span className="font-bold text-slate-400">+</span>
                   <input
+                    ref={paxChildInputRef}
+                    data-mandatory-key="paxChild"
                     type="number"
                     placeholder="C"
                     value={formData.paxChild}
-                    onFocus={validateDelayReason}
                     onChange={(e) => setFormData({ ...formData, paxChild: e.target.value })}
                     className="w-16 p-2 border border-slate-600 rounded-lg text-center text-sm font-bold bg-slate-900 text-white focus:outline-none"
                   />
                   <span className="font-bold text-slate-400">+</span>
                   <input
+                    ref={paxInfantInputRef}
+                    data-mandatory-key="paxInfant"
                     type="number"
                     placeholder="I"
                     value={formData.paxInfant}
-                    onFocus={validateDelayReason}
                     onChange={(e) => setFormData({ ...formData, paxInfant: e.target.value })}
                     className="w-16 p-2 border border-slate-600 rounded-lg text-center text-sm font-bold bg-slate-900 text-white focus:outline-none"
                   />
@@ -1345,10 +1517,11 @@ export default function App() {
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">FUEL UPLIFT</label>
                 <div className="flex rounded-xl border border-slate-700 overflow-hidden bg-slate-800/90 focus-within:border-amber-400">
                   <input
+                    ref={fuelUpliftInputRef}
+                    data-mandatory-key="fuelUplift"
                     type="number"
                     placeholder="5000"
                     value={formData.fuelUplift}
-                    onFocus={validateDelayReason}
                     onChange={(e) => setFormData({ ...formData, fuelUplift: e.target.value })}
                     className="p-2.5 flex-1 bg-transparent text-white focus:outline-none text-sm"
                   />
@@ -1363,6 +1536,8 @@ export default function App() {
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">BAGGAGE</label>
                 <div className="flex gap-1.5">
                   <input
+                    ref={baggageWeightInputRef}
+                    data-mandatory-key="baggageWeight"
                     type="number"
                     placeholder="Weight (KG)"
                     value={formData.baggageWeight}
@@ -1370,6 +1545,8 @@ export default function App() {
                     className="p-2.5 flex-1 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm"
                   />
                   <input
+                    ref={baggagePcsInputRef}
+                    data-mandatory-key="baggagePcs"
                     type="number"
                     placeholder="PCS"
                     value={formData.baggagePcs}
@@ -1384,6 +1561,8 @@ export default function App() {
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">CARGO</label>
                 <div className="flex gap-1.5">
                   <input
+                    ref={cargoWeightInputRef}
+                    data-mandatory-key="cargoWeight"
                     type="number"
                     placeholder="Weight (KG)"
                     value={formData.cargoWeight}
@@ -1391,6 +1570,8 @@ export default function App() {
                     className="p-2.5 flex-1 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm"
                   />
                   <input
+                    ref={cargoPcsInputRef}
+                    data-mandatory-key="cargoPcs"
                     type="number"
                     placeholder="PCS"
                     value={formData.cargoPcs}
@@ -2116,6 +2297,41 @@ export default function App() {
             </div>
           </div>
         )}
+
+      {/* Mandatory Box Skipped Warning Modal Popup ("FILL UP THIS BOX") */}
+      {missingMandatoryBox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border-2 border-rose-400 text-rose-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
+              <AlertTriangle className="w-9 h-9" />
+            </div>
+            <h3 className="text-2xl font-black text-rose-400 uppercase tracking-widest mb-2">
+              FILL UP THIS BOX
+            </h3>
+            <div className="bg-rose-500/15 border border-rose-500/40 rounded-2xl p-4 my-4">
+              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
+                FILL UP THIS BOX: <span className="text-amber-400">{missingMandatoryBox.label}</span>
+              </p>
+            </div>
+            <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
+              THIS BOX IS MANDATORY. PLEASE COMPLETE <span className="text-white font-bold">{missingMandatoryBox.label}</span> BEFORE PROCEEDING TO THE NEXT BOX.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const targetRef = missingMandatoryBox.ref;
+                setMissingMandatoryBox(null);
+                setTimeout(() => {
+                  targetRef.current?.focus();
+                }, 100);
+              }}
+              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-slate-950 font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
+            >
+              OK, FILL UP NOW
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Seat Number Warning Modal Popup (UM PAX, FIRE ARMS, WCHR, WCHC) */}
       {seatWarningTarget && (
