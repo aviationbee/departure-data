@@ -342,6 +342,7 @@ export async function logUserActivity(
       createdAt,
       timestamp: now,
     });
+    await syncRealtimeDataOnActivity(true);
   } catch (err) {
     console.error('Firestore logUserActivity error:', err);
   }
