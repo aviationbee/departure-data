@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { UserInfo, PageMode } from '../types';
 import {
+  saveMassReportToCloud,
+  deleteMassReportFromCloud,
+  logUserActivity,
+} from '../firebase';
+import {
   User,
   ShieldCheck,
   MapPin,
@@ -360,6 +365,14 @@ export const MassFormModule: React.FC<Props> = ({
     setHistoryList(updatedHistory);
     localStorage.setItem('massApp_history', JSON.stringify(updatedHistory));
 
+    // Save MASS report to Cloud Firestore for 90 days & log activity
+    saveMassReportToCloud(newEntry, userInfo);
+    logUserActivity(
+      'MASS REPORT GENERATED',
+      `Generated MASS (${cleanCategory}) Report for BS-${cleanFlightNo} (${cleanDest}) Date: ${flightDate}`,
+      userInfo
+    );
+
     setActiveReportData({
       dateInput: flightDate,
       flightNoInput: cleanFlightNo,
@@ -371,9 +384,14 @@ export const MassFormModule: React.FC<Props> = ({
   };
 
   const handleDeleteHistoryItem = (id: number) => {
+    const target = historyList.find((h) => h.id === id);
     const updated = historyList.filter((h) => h.id !== id);
     setHistoryList(updated);
     localStorage.setItem('massApp_history', JSON.stringify(updated));
+    if (target) {
+      const st = (userInfo.stationName || 'DAC').trim().toUpperCase();
+      deleteMassReportFromCloud(`${st}_${target.id}`, target.flightNoInput, target.dateInput, userInfo);
+    }
     showToast('REPORT DELETED');
   };
 

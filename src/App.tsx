@@ -25,6 +25,13 @@ import { generateFlightDepartureMessage, parseFlstMessage } from './utils/report
 import { DepartureReportTable } from './components/DepartureReportTable';
 import { DeparturePhotoCard } from './components/DeparturePhotoCard';
 import { MassFormModule } from './components/MassFormModule';
+import { AdminModule } from './components/AdminModule';
+import {
+  saveFlightReportToCloud,
+  logUserActivity,
+  subscribeToSystemNotice,
+  SystemNoticeDoc,
+} from './firebase';
 import {
   Plane,
   Printer,
@@ -43,6 +50,8 @@ import {
   LogOut,
   AlertTriangle,
   Image as ImageIcon,
+  Lock,
+  Megaphone,
 } from 'lucide-react';
 
 const STATION_OPTIONS = [
@@ -204,6 +213,10 @@ export default function App() {
   const [showNoshowPnrWarningModal, setShowNoshowPnrWarningModal] = useState(false);
   const [pendingReportType, setPendingReportType] = useState<'intl' | 'dom' | null>(null);
   const [pageHistory, setPageHistory] = useState<PageMode[]>([]);
+  const [liveNotice, setLiveNotice] = useState<SystemNoticeDoc | null>(null);
+  const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
+    return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
+  });
   const [seatWarningTarget, setSeatWarningTarget] = useState<'umPax' | 'fireArms' | 'wchr' | 'wchc' | null>(null);
   const delayReasonInputRef = React.useRef<HTMLInputElement>(null);
   const counterNoshowInputRef = React.useRef<HTMLInputElement>(null);
@@ -257,23 +270,91 @@ export default function App() {
       setCurrentPage('mass-dashboard');
     } else if (currentPage === 'mass-dashboard') {
       setCurrentPage('mass-login');
+    } else if (currentPage === 'admin-logs') {
+      setCurrentPage('admin-dashboard');
+    } else if (currentPage === 'admin-dashboard') {
+      setCurrentPage('welcome');
     } else {
       setCurrentPage('welcome');
     }
   };
 
   const handleLogout = () => {
+    if (userInfo.userName) {
+      logUserActivity('USER LOG OUT', `Officer logged out from ${userInfo.stationName}`, userInfo);
+    }
     localStorage.removeItem('usba_user_info');
     localStorage.removeItem('usba_flight_form_data');
     localStorage.removeItem('usba_current_page');
     localStorage.removeItem('usba_last_data_page');
     localStorage.removeItem('usba_report_type');
+    localStorage.removeItem('usba_last_activity');
+    sessionStorage.removeItem('usba_admin_role');
+    sessionStorage.removeItem('usba_admin_station');
     setPageHistory([]);
     setUserInfo({ userName: '', usbaId: '', stationName: 'DAC' });
     setFormData(INITIAL_FORM_DATA);
     setCurrentPage('identification');
     showToast('LOGGED OUT SUCCESSFULLY.');
   };
+
+  // Real-time subscription to Super Admin Notice (no page refresh required)
+  useEffect(() => {
+    const unsub = subscribeToSystemNotice((notice) => {
+      setLiveNotice(notice);
+    });
+    return () => unsub();
+  }, []);
+
+  // 2-Hour Inactivity Auto-Logout (7,200,000 ms)
+  useEffect(() => {
+    if (currentPage === 'identification') return;
+
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+    const updateActivity = () => {
+      localStorage.setItem('usba_last_activity', String(Date.now()));
+    };
+
+    if (!localStorage.getItem('usba_last_activity')) {
+      updateActivity();
+    }
+
+    const checkInactivity = () => {
+      const lastAct = Number(localStorage.getItem('usba_last_activity') || Date.now());
+      if (Date.now() - lastAct >= TWO_HOURS_MS) {
+        if (userInfo.userName) {
+          logUserActivity(
+            'AUTO LOG OUT (2H INACTIVE)',
+            `Auto logged out due to 2 hours of inactivity at ${userInfo.stationName}`,
+            userInfo
+          );
+        }
+        localStorage.removeItem('usba_user_info');
+        localStorage.removeItem('usba_flight_form_data');
+        localStorage.removeItem('usba_current_page');
+        localStorage.removeItem('usba_last_data_page');
+        localStorage.removeItem('usba_report_type');
+        localStorage.removeItem('usba_last_activity');
+        sessionStorage.removeItem('usba_admin_role');
+        sessionStorage.removeItem('usba_admin_station');
+        setPageHistory([]);
+        setUserInfo({ userName: '', usbaId: '', stationName: 'DAC' });
+        setFormData(INITIAL_FORM_DATA);
+        setCurrentPage('identification');
+        showToast('AUTO LOGGED OUT DUE TO 2 HOURS INACTIVITY.');
+      }
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach((ev) => window.addEventListener(ev, updateActivity, { passive: true }));
+    const interval = window.setInterval(checkInactivity, 15000);
+    checkInactivity();
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, updateActivity));
+      window.clearInterval(interval);
+    };
+  }, [currentPage, userInfo]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -387,6 +468,12 @@ export default function App() {
       alert('Please fill in both User Name and USBA ID to continue.');
       return;
     }
+    localStorage.setItem('usba_last_activity', String(Date.now()));
+    logUserActivity(
+      'USER LOG IN',
+      `Officer logged in at Station ${userInfo.stationName}`,
+      userInfo
+    );
     setCurrentPage('welcome');
   };
 
@@ -459,6 +546,14 @@ export default function App() {
       setShowNoshowPnrWarningModal(true);
       return;
     }
+
+    // Automatically save flight data to Cloud Firestore (preserved for 90 days) & log activity
+    saveFlightReportToCloud(formData, userInfo);
+    logUserActivity(
+      'FLIGHT REPORT GENERATED',
+      `Generated Flight Report BS-${formData.flightNoSuffix || '000'} (${formData.route || 'N/A'}) Date: ${formData.date}`,
+      userInfo
+    );
 
     setReportType(type);
     navigateToPage('dual-report');
@@ -755,6 +850,14 @@ export default function App() {
               >
                 <FileText className="w-5 h-5 text-purple-200" />
                 <span>MASS FORM</span>
+              </button>
+
+              <button
+                onClick={() => navigateToPage('admin-login')}
+                className="py-4 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black tracking-widest shadow-lg hover:shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-amber-300/50 flex items-center justify-center gap-3 cursor-pointer uppercase"
+              >
+                <Lock className="w-5 h-5 text-slate-950" />
+                <span>ADMIN ONLY</span>
               </button>
 
               <button
@@ -1958,6 +2061,61 @@ export default function App() {
           showToast={showToast}
         />
       )}
+
+      {/* ================= ADMIN ONLY PAGES ================= */}
+      {(currentPage === 'admin-login' ||
+        currentPage === 'admin-dashboard' ||
+        currentPage === 'admin-logs') && (
+        <AdminModule
+          currentPage={currentPage}
+          setCurrentPage={navigateToPage}
+          onPrevious={handlePreviousPage}
+          onDashboard={() => navigateToPage('welcome')}
+          onLogout={handleLogout}
+          userInfo={userInfo}
+          showToast={showToast}
+          onLoadFlightReport={(loadedData) => {
+            setFormData(loadedData);
+            navigateToPage('dual-report');
+          }}
+        />
+      )}
+
+      {/* Real-Time Super Admin Notice Popup Modal (Shows immediately without page refresh) */}
+      {liveNotice &&
+        liveNotice.active &&
+        liveNotice.message &&
+        liveNotice.timestamp > dismissedNoticeTs && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fadeIn">
+            <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-lg w-full p-7 text-center shadow-2xl relative uppercase">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-amber-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <Megaphone className="w-9 h-9" />
+              </div>
+              <h3 className="text-xl font-black text-amber-400 uppercase tracking-widest mb-2">
+                URGENT SUPER ADMIN NOTICE
+              </h3>
+              <div className="bg-amber-500/15 border-2 border-amber-500/50 rounded-2xl p-5 my-4">
+                <p className="text-base md:text-lg font-black text-white uppercase tracking-wider leading-relaxed">
+                  ADMIN MESSAGE : {liveNotice.message}
+                </p>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-6 uppercase tracking-wider">
+                CIRCULATED BY {liveNotice.createdBy || 'SUPER ADMIN'} &bull;{' '}
+                {new Date(liveNotice.timestamp || liveNotice.createdAt).toLocaleTimeString()}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDismissedNoticeTs(liveNotice.timestamp);
+                  localStorage.setItem('usba_dismissed_notice_ts', String(liveNotice.timestamp));
+                }}
+                className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
+              >
+                ACKNOWLEDGE &amp; CONTINUE
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* Seat Number Warning Modal Popup (UM PAX, FIRE ARMS, WCHR, WCHC) */}
       {seatWarningTarget && (

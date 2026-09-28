@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isValidFlightReport() {
+      return request.resource.data.station is string
+        && request.resource.data.station.size() >= 2
+        && request.resource.data.station.size() <= 15
+        && request.resource.data.date is string
+        && request.resource.data.date.size() <= 20
+        && request.resource.data.flightNo is string
+        && request.resource.data.flightNo.size() <= 20
+        && request.resource.data.createdAt is string;
+    }
+
+    function isValidMassReport() {
+      return request.resource.data.station is string
+        && request.resource.data.station.size() <= 15
+        && request.resource.data.dateInput is string
+        && request.resource.data.flightNoInput is string
+        && request.resource.data.createdAt is string;
+    }
+
+    function isValidActivityLog() {
+      return request.resource.data.action is string
+        && request.resource.data.action.size() <= 100
+        && request.resource.data.userName is string
+        && request.resource.data.userName.size() <= 100
+        && request.resource.data.station is string
+        && request.resource.data.station.size() <= 20
+        && request.resource.data.createdAt is string;
+    }
+
+    function isValidSystemNotice() {
+      return request.resource.data.message is string
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.active is bool
+        && request.resource.data.createdAt is string;
+    }
+
+    match /flight_reports/{reportId} {
+      allow read: if true;
+      allow create, update: if isValidFlightReport();
+      allow delete: if true;
+    }
+
+    match /mass_reports/{reportId} {
+      allow read: if true;
+      allow create, update: if isValidMassReport();
+      allow delete: if true;
+    }
+
+    match /activity_logs/{logId} {
+      allow read: if true;
+      allow create: if isValidActivityLog();
+      allow delete: if true;
+    }
+
+    match /system_notices/{noticeId} {
+      allow read: if true;
+      allow create, update: if isValidSystemNotice();
+      allow delete: if true;
+    }
+  }
+}

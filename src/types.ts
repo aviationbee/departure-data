@@ -91,4 +91,8 @@ export type PageMode =
   | 'mass-login'
   | 'mass-dashboard'
   | 'mass-history'
-  | 'mass-report';
+  | 'mass-report'
+  | 'admin-login'
+  | 'admin-dashboard'
+  | 'admin-logs';
+

@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "FlightReport": {
+      "title": "FlightReport",
+      "description": "Full day flight data report stored per station for 90 days",
+      "type": "object",
+      "properties": {
+        "station": { "type": "string" },
+        "date": { "type": "string" },
+        "flightNo": { "type": "string" },
+        "route": { "type": "string" },
+        "acReg": { "type": "string" },
+        "acType": { "type": "string" },
+        "captain": { "type": "string" },
+        "preparedBy": { "type": "string" },
+        "usbaId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "number" }
+      },
+      "required": ["station", "date", "flightNo", "createdAt"]
+    },
+    "MassReport": {
+      "title": "MassReport",
+      "description": "MASS Form history report stored for 90 days",
+      "type": "object",
+      "properties": {
+        "station": { "type": "string" },
+        "dateInput": { "type": "string" },
+        "flightNoInput": { "type": "string" },
+        "destInput": { "type": "string" },
+        "categoryInput": { "type": "string" },
+        "flstText": { "type": "string" },
+        "preparedBy": { "type": "string" },
+        "usbaId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "number" }
+      },
+      "required": ["station", "dateInput", "flightNoInput", "createdAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "User login, logout, report generation, and deletion activity log",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "userName": { "type": "string" },
+        "usbaId": { "type": "string" },
+        "station": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["action", "userName", "station", "createdAt"]
+    },
+    "SystemNotice": {
+      "title": "SystemNotice",
+      "description": "Real-time circular notice from Super Admin",
+      "type": "object",
+      "properties": {
+        "message": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["message", "active", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/flight_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/FlightReport" },
+      "description": "Flight data reports preserved for 90 days"
+    },
+    "/mass_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/MassReport" },
+      "description": "MASS form history reports preserved for 90 days"
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "System audit and user activity logs"
+    },
+    "/system_notices/{noticeId}": {
+      "schema": { "$ref": "#/entities/SystemNotice" },
+      "description": "Real-time broadcast notices from Super Admin"
+    }
+  }
+}
