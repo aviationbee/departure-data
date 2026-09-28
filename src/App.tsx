@@ -203,6 +203,7 @@ export default function App() {
   const [noCounterNoshowConfirmed, setNoCounterNoshowConfirmed] = useState(false);
   const [showNoshowPnrWarningModal, setShowNoshowPnrWarningModal] = useState(false);
   const [pendingReportType, setPendingReportType] = useState<'intl' | 'dom' | null>(null);
+  const [pageHistory, setPageHistory] = useState<PageMode[]>([]);
   const [seatWarningTarget, setSeatWarningTarget] = useState<'umPax' | 'fireArms' | 'wchr' | 'wchc' | null>(null);
   const delayReasonInputRef = React.useRef<HTMLInputElement>(null);
   const counterNoshowInputRef = React.useRef<HTMLInputElement>(null);
@@ -234,18 +235,44 @@ export default function App() {
     localStorage.setItem('usba_flight_form_data', JSON.stringify(formData));
   }, [formData]);
 
-  const handleLogout = () => {
-    if (window.confirm('ARE YOU SURE TO LOG OUT? ALL STORED DATA WILL BE CLEARED.')) {
-      localStorage.removeItem('usba_user_info');
-      localStorage.removeItem('usba_flight_form_data');
-      localStorage.removeItem('usba_current_page');
-      localStorage.removeItem('usba_last_data_page');
-      localStorage.removeItem('usba_report_type');
-      setUserInfo({ userName: '', usbaId: '', stationName: 'DAC' });
-      setFormData(INITIAL_FORM_DATA);
-      setCurrentPage('identification');
-      showToast('LOGGED OUT SUCCESSFULLY.');
+  const navigateToPage = (nextPage: PageMode) => {
+    if (nextPage === 'identification' || nextPage === 'welcome') {
+      setPageHistory([]);
+    } else if (nextPage !== currentPage) {
+      setPageHistory((prev) => [...prev, currentPage]);
     }
+    setCurrentPage(nextPage);
+  };
+
+  const handlePreviousPage = () => {
+    if (pageHistory.length > 0) {
+      const prev = pageHistory[pageHistory.length - 1];
+      setPageHistory((h) => h.slice(0, -1));
+      setCurrentPage(prev);
+      return;
+    }
+    if (currentPage === 'dual-report') {
+      setCurrentPage(lastDataPage);
+    } else if (currentPage === 'mass-report' || currentPage === 'mass-history') {
+      setCurrentPage('mass-dashboard');
+    } else if (currentPage === 'mass-dashboard') {
+      setCurrentPage('mass-login');
+    } else {
+      setCurrentPage('welcome');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('usba_user_info');
+    localStorage.removeItem('usba_flight_form_data');
+    localStorage.removeItem('usba_current_page');
+    localStorage.removeItem('usba_last_data_page');
+    localStorage.removeItem('usba_report_type');
+    setPageHistory([]);
+    setUserInfo({ userName: '', usbaId: '', stationName: 'DAC' });
+    setFormData(INITIAL_FORM_DATA);
+    setCurrentPage('identification');
+    showToast('LOGGED OUT SUCCESSFULLY.');
   };
 
   const showToast = (msg: string) => {
@@ -366,7 +393,7 @@ export default function App() {
   const goToDataPage = (page: PageMode, type: 'intl' | 'dom') => {
     setReportType(type);
     setLastDataPage(page);
-    setCurrentPage(page);
+    navigateToPage(page);
   };
 
   const isZeroOrEmptyVal = (val?: string): boolean => {
@@ -434,7 +461,7 @@ export default function App() {
     }
 
     setReportType(type);
-    setCurrentPage('dual-report');
+    navigateToPage('dual-report');
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -723,7 +750,7 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => setCurrentPage('mass-login')}
+                onClick={() => navigateToPage('mass-login')}
                 className="py-4 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-purple-400/30 flex items-center justify-center gap-3 cursor-pointer uppercase"
               >
                 <FileText className="w-5 h-5 text-purple-200" />
@@ -731,7 +758,7 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => setCurrentPage('identification')}
+                onClick={handleLogout}
                 className="mt-4 py-2.5 px-6 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-semibold text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer w-fit mx-auto border border-slate-700"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -784,11 +811,38 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handlePreviousPage}
+                  className="px-3.5 py-2 text-xs rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-sans font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-slate-300" />
+                  <span>PREVIOUS</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateToPage('welcome')}
+                  className="px-3.5 py-2 text-xs rounded-xl bg-indigo-600/80 hover:bg-indigo-500 text-white border border-indigo-400/40 font-sans font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
+                >
+                  <Navigation className="w-3.5 h-3.5 text-indigo-200" />
+                  <span>DASHBOARD</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="px-3.5 py-2 text-xs rounded-xl bg-rose-600/80 hover:bg-rose-500 text-white border border-rose-400/40 font-sans font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-100" />
+                  <span>LOG OUT</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => populateSampleData(currentPage === 'data-intl' ? 'intl' : 'dom')}
-                  className="px-3.5 py-1.5 text-xs rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-sans font-semibold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+                  className="px-3.5 py-2 text-xs rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-sans font-semibold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm uppercase"
                   title="Populate test data with standard flight parameters"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -1728,7 +1782,7 @@ export default function App() {
             <div className="flex flex-col sm:flex-row justify-between items-center mt-8 pt-4 border-t border-slate-800 gap-4">
               <button
                 type="button"
-                onClick={() => setCurrentPage('welcome')}
+                onClick={handlePreviousPage}
                 className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-slate-700"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -1765,11 +1819,19 @@ export default function App() {
 
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => setCurrentPage(lastDataPage)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm border border-slate-700"
+                onClick={handlePreviousPage}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm border border-slate-700 uppercase"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>BACK TO FORM</span>
+                <span>PREVIOUS</span>
+              </button>
+
+              <button
+                onClick={() => navigateToPage('welcome')}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>DASHBOARD</span>
               </button>
 
               <button
@@ -1798,7 +1860,7 @@ export default function App() {
 
               <button
                 onClick={handleLogout}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
+                className="px-3.5 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-500 text-white border border-rose-400/40 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>LOG OUT</span>
@@ -1888,7 +1950,10 @@ export default function App() {
         currentPage === 'mass-report') && (
         <MassFormModule
           currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
+          setCurrentPage={navigateToPage}
+          onPrevious={handlePreviousPage}
+          onDashboard={() => navigateToPage('welcome')}
+          onLogout={handleLogout}
           userInfo={userInfo}
           showToast={showToast}
         />

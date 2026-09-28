@@ -11,6 +11,7 @@ import {
   Trash2,
   FileText,
   Send,
+  Navigation,
 } from 'lucide-react';
 
 interface MassHistoryItem {
@@ -31,6 +32,9 @@ interface MassPassenger {
 interface Props {
   currentPage: PageMode;
   setCurrentPage: (page: PageMode) => void;
+  onPrevious: () => void;
+  onDashboard: () => void;
+  onLogout: () => void;
   userInfo: UserInfo;
   showToast: (msg: string) => void;
 }
@@ -204,6 +208,9 @@ function parseMassFLST(text: string, selectedCategory: string): MassPassenger[] 
 export const MassFormModule: React.FC<Props> = ({
   currentPage,
   setCurrentPage,
+  onPrevious,
+  onDashboard,
+  onLogout,
   userInfo,
   showToast,
 }) => {
@@ -290,7 +297,7 @@ export const MassFormModule: React.FC<Props> = ({
     setCurrentPage('mass-dashboard');
   };
 
-  // Handle MASS Logout (back to Welcome page)
+  // Handle MASS Logout (direct logout to Login page)
   const handleMassLogout = () => {
     localStorage.removeItem('massApp_designation');
     localStorage.removeItem('massApp_flight-date');
@@ -302,8 +309,7 @@ export const MassFormModule: React.FC<Props> = ({
     setFlightCategory('MAAS');
     setFlstData('');
     setFlightDate(new Date().toISOString().split('T')[0]);
-    showToast('BYE BYE OFFICER');
-    setCurrentPage('welcome');
+    onLogout();
   };
 
   // Generate / Save MASS Report
@@ -376,6 +382,34 @@ export const MassFormModule: React.FC<Props> = ({
     return (
       <div className="flex-1 flex flex-col justify-center items-center p-4 md:p-6 min-h-screen relative">
         <div className="max-w-md w-full bg-slate-900/90 backdrop-blur-xl p-8 md:p-10 rounded-2xl border border-slate-700/70 border-t-4 border-t-sky-500 border-b-4 border-b-rose-500 shadow-2xl relative z-10 text-white">
+          {/* Common Top Action Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-6 pb-4 border-b border-slate-800">
+            <button
+              type="button"
+              onClick={onPrevious}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-all uppercase"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>PREVIOUS</span>
+            </button>
+            <button
+              type="button"
+              onClick={onDashboard}
+              className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all uppercase"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>DASHBOARD</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleMassLogout}
+              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all uppercase"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>LOG OUT</span>
+            </button>
+          </div>
+
           {/* Header matching 3rd attached screenshot in dark aviation theme */}
           <div className="text-center mb-6">
             <h2 className="text-2xl md:text-3xl font-black tracking-wider text-white uppercase mb-2">
@@ -487,11 +521,20 @@ export const MassFormModule: React.FC<Props> = ({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCurrentPage('welcome')}
+                onClick={onPrevious}
                 className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-all uppercase"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>MENU</span>
+                <span>PREVIOUS</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onDashboard}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all uppercase"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>DASHBOARD</span>
               </button>
 
               <button
@@ -611,9 +654,37 @@ export const MassFormModule: React.FC<Props> = ({
     return (
       <div className="flex-1 flex flex-col justify-center items-center p-4 md:p-8 min-h-screen relative">
         <div className="max-w-3xl w-full bg-slate-900/90 backdrop-blur-xl p-6 md:p-8 rounded-2xl border border-slate-700/70 border-t-4 border-t-sky-500 border-b-4 border-b-rose-500 shadow-2xl text-slate-200">
-          <h2 className="text-xl md:text-2xl font-black tracking-wider text-center text-white uppercase mb-6">
-            SAVED REPORTS HISTORY
-          </h2>
+          <div className="flex flex-col sm:flex-row justify-between items-center pb-4 mb-6 border-b border-slate-800 gap-3">
+            <h2 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase">
+              SAVED REPORTS HISTORY
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onPrevious}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-all uppercase"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>PREVIOUS</span>
+              </button>
+              <button
+                type="button"
+                onClick={onDashboard}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all uppercase"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>DASHBOARD</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleMassLogout}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all uppercase"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>LOG OUT</span>
+              </button>
+            </div>
+          </div>
 
           <div className="max-h-[420px] overflow-y-auto rounded-xl border border-slate-700 mb-6">
             <table className="w-full border-collapse text-xs md:text-sm uppercase">
@@ -713,23 +784,41 @@ export const MassFormModule: React.FC<Props> = ({
             <span>MEET AND ASSIST (MASS) HAND OVER LIST &mdash; BS-{dataToUse.flightNoInput}</span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onPrevious}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-all uppercase"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>PREVIOUS</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onDashboard}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg transition-all uppercase"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>DASHBOARD</span>
+            </button>
+
             <button
               type="button"
               onClick={() => window.print()}
-              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs md:text-sm flex items-center gap-2 cursor-pointer shadow-lg transition-all uppercase"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg transition-all uppercase"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-3.5 h-3.5" />
               <span>PRINT / SAVE AS PDF</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setCurrentPage('mass-dashboard')}
-              className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs md:text-sm flex items-center gap-2 cursor-pointer border border-slate-700 transition-all uppercase"
+              onClick={handleMassLogout}
+              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg transition-all uppercase"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>BACK TO EDIT</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span>LOG OUT</span>
             </button>
           </div>
         </div>
