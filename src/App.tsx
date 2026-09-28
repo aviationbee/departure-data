@@ -102,7 +102,9 @@ const INITIAL_FORM_DATA: FlightFormData = {
   cip: '',
   maas: '',
   umPax: '',
+  umPaxSeat: '',
   fireArms: '',
+  fireArmsSeat: '',
   wchrFig: '',
   wchrSeat: '',
   wchcFig: '',
@@ -197,7 +199,17 @@ export default function App() {
   const [showDelayBox, setShowDelayBox] = useState(false);
   const [delayWarningModal, setDelayWarningModal] = useState(false);
   const [showNewReportModal, setShowNewReportModal] = useState(false);
+  const [showCounterNoshowModal, setShowCounterNoshowModal] = useState(false);
+  const [noCounterNoshowConfirmed, setNoCounterNoshowConfirmed] = useState(false);
+  const [pendingReportType, setPendingReportType] = useState<'intl' | 'dom' | null>(null);
+  const [seatWarningTarget, setSeatWarningTarget] = useState<'umPax' | 'fireArms' | 'wchr' | 'wchc' | null>(null);
   const delayReasonInputRef = React.useRef<HTMLInputElement>(null);
+  const counterNoshowInputRef = React.useRef<HTMLInputElement>(null);
+  const noshowPnrInputRef = React.useRef<HTMLInputElement>(null);
+  const umPaxSeatInputRef = React.useRef<HTMLInputElement>(null);
+  const fireArmsSeatInputRef = React.useRef<HTMLInputElement>(null);
+  const wchrSeatInputRef = React.useRef<HTMLInputElement>(null);
+  const wchcSeatInputRef = React.useRef<HTMLInputElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Sync state to LocalStorage
@@ -356,8 +368,63 @@ export default function App() {
     setCurrentPage(page);
   };
 
-  const handleGenerateReport = (type: 'intl' | 'dom') => {
+  const isZeroOrEmptyVal = (val?: string): boolean => {
+    if (!val) return true;
+    const trimmed = val.trim().toUpperCase();
+    if (trimmed === '' || trimmed === 'NIL' || trimmed === 'N/A' || trimmed === '-') return true;
+    if (/^0+$/.test(trimmed)) return true;
+    return false;
+  };
+
+  const handleGenerateReport = (type: 'intl' | 'dom', bypassCounterZeroConfirm = false) => {
     if (!validateDelayReason()) return;
+
+    // 1. Validate UM PAX Seat Number if UM PAX > 0
+    const umPaxNum = parseInt(formData.umPax, 10);
+    if (!isNaN(umPaxNum) && umPaxNum > 0 && isZeroOrEmptyVal(formData.umPaxSeat)) {
+      setSeatWarningTarget('umPax');
+      return;
+    }
+
+    // 2. Validate FIRE ARMS Seat Number if FIRE ARMS > 0
+    const fireArmsNum = parseInt(formData.fireArms, 10);
+    const hasFireArms = (!isNaN(fireArmsNum) && fireArmsNum > 0) || !isZeroOrEmptyVal(formData.fireArms);
+    if (hasFireArms && isZeroOrEmptyVal(formData.fireArmsSeat)) {
+      setSeatWarningTarget('fireArms');
+      return;
+    }
+
+    // 3. Validate WCHR Seat Number if WCHR > 0
+    const wchrNum = parseInt(formData.wchrFig, 10);
+    if (!isNaN(wchrNum) && wchrNum > 0 && isZeroOrEmptyVal(formData.wchrSeat)) {
+      setSeatWarningTarget('wchr');
+      return;
+    }
+
+    // 4. Validate WCHC Seat Number if WCHC > 0
+    const wchcNum = parseInt(formData.wchcFig, 10);
+    if (!isNaN(wchcNum) && wchcNum > 0 && isZeroOrEmptyVal(formData.wchcSeat)) {
+      setSeatWarningTarget('wchc');
+      return;
+    }
+
+    // 5. Check Counter Noshow: if 0 or skipped, show confirmation popup
+    const counterNum = parseInt(formData.counterNoshow, 10);
+    const isCounterZeroOrSkipped = isNaN(counterNum) || counterNum === 0;
+
+    if (isCounterZeroOrSkipped && !noCounterNoshowConfirmed && !bypassCounterZeroConfirm) {
+      setPendingReportType(type);
+      setShowCounterNoshowModal(true);
+      return;
+    }
+
+    // 6. If Counter Noshow > 0, user MUST input PNR number in NOSHOW PNR box
+    if (!isNaN(counterNum) && counterNum > 0 && isZeroOrEmptyVal(formData.noshowPnr)) {
+      showToast('OFFICER, PLEASE INPUT PNR NUMBER IN NOSHOW PNR BOX!');
+      setTimeout(() => noshowPnrInputRef.current?.focus(), 80);
+      return;
+    }
+
     setReportType(type);
     setCurrentPage('dual-report');
   };
@@ -1319,33 +1386,96 @@ export default function App() {
               </div>
 
               {/* UM PAX */}
-              <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">UM PAX</label>
-                <input
-                  type="number"
-                  placeholder="Pax Figure"
-                  value={formData.umPax}
-                  onChange={(e) => setFormData({ ...formData, umPax: e.target.value })}
-                  className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm"
-                />
+              <div
+                className="flex flex-col"
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    const num = parseInt(formData.umPax, 10);
+                    if (!isNaN(num) && num > 0 && isZeroOrEmptyVal(formData.umPaxSeat)) {
+                      setSeatWarningTarget('umPax');
+                    }
+                  }
+                }}
+              >
+                <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">UM PAX</label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    placeholder="UM Fig"
+                    value={formData.umPax}
+                    onChange={(e) => setFormData({ ...formData, umPax: e.target.value })}
+                    className="w-24 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center"
+                  />
+                  <input
+                    ref={umPaxSeatInputRef}
+                    type="text"
+                    placeholder="Seat No (E.G. 4A)"
+                    value={formData.umPaxSeat || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, umPaxSeat: e.target.value.toUpperCase() })
+                    }
+                    className={`flex-1 p-2.5 border rounded-xl bg-slate-800/90 text-white focus:outline-none text-sm uppercase ${
+                      parseInt(formData.umPax, 10) > 0 && isZeroOrEmptyVal(formData.umPaxSeat)
+                        ? 'border-rose-500 focus:border-rose-400'
+                        : 'border-slate-700 focus:border-amber-400'
+                    }`}
+                  />
+                </div>
               </div>
 
               {/* FIRE ARMS */}
-              <div className="flex flex-col">
+              <div
+                className="flex flex-col"
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    const num = parseInt(formData.fireArms, 10);
+                    const hasFa = (!isNaN(num) && num > 0) || !isZeroOrEmptyVal(formData.fireArms);
+                    if (hasFa && isZeroOrEmptyVal(formData.fireArmsSeat)) {
+                      setSeatWarningTarget('fireArms');
+                    }
+                  }
+                }}
+              >
                 <label className="font-bold text-amber-300 mb-1 tracking-wider uppercase">
                   FIRE ARMS
                 </label>
-                <input
-                  type="text"
-                  placeholder="NIL OR QTY / DETAILS"
-                  value={formData.fireArms}
-                  onChange={(e) => setFormData({ ...formData, fireArms: e.target.value.toUpperCase() })}
-                  className="p-2.5 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
-                />
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    placeholder="FA Fig"
+                    value={formData.fireArms}
+                    onChange={(e) => setFormData({ ...formData, fireArms: e.target.value })}
+                    className="w-24 p-2.5 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center uppercase"
+                  />
+                  <input
+                    ref={fireArmsSeatInputRef}
+                    type="text"
+                    placeholder="Seat No (E.G. 5B)"
+                    value={formData.fireArmsSeat || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, fireArmsSeat: e.target.value.toUpperCase() })
+                    }
+                    className={`flex-1 p-2.5 border rounded-xl bg-slate-800/90 text-white focus:outline-none text-sm uppercase ${
+                      !isZeroOrEmptyVal(formData.fireArms) && isZeroOrEmptyVal(formData.fireArmsSeat)
+                        ? 'border-rose-500 focus:border-rose-400'
+                        : 'border-amber-500/50 focus:border-amber-400'
+                    }`}
+                  />
+                </div>
               </div>
 
               {/* WCHR */}
-              <div className="flex flex-col">
+              <div
+                className="flex flex-col"
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    const num = parseInt(formData.wchrFig, 10);
+                    if (!isNaN(num) && num > 0 && isZeroOrEmptyVal(formData.wchrSeat)) {
+                      setSeatWarningTarget('wchr');
+                    }
+                  }
+                }}
+              >
                 <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">
                   WCHR
                 </label>
@@ -1358,17 +1488,32 @@ export default function App() {
                     className="w-24 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center"
                   />
                   <input
+                    ref={wchrSeatInputRef}
                     type="text"
                     placeholder="Seat No (E.G. 2A, 3A)"
                     value={formData.wchrSeat}
                     onChange={(e) => setFormData({ ...formData, wchrSeat: e.target.value.toUpperCase() })}
-                    className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
+                    className={`flex-1 p-2.5 border rounded-xl bg-slate-800/90 text-white focus:outline-none text-sm uppercase ${
+                      parseInt(formData.wchrFig, 10) > 0 && isZeroOrEmptyVal(formData.wchrSeat)
+                        ? 'border-rose-500 focus:border-rose-400'
+                        : 'border-slate-700 focus:border-amber-400'
+                    }`}
                   />
                 </div>
               </div>
 
               {/* WCHC */}
-              <div className="flex flex-col">
+              <div
+                className="flex flex-col"
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    const num = parseInt(formData.wchcFig, 10);
+                    if (!isNaN(num) && num > 0 && isZeroOrEmptyVal(formData.wchcSeat)) {
+                      setSeatWarningTarget('wchc');
+                    }
+                  }
+                }}
+              >
                 <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">
                   WCHC
                 </label>
@@ -1381,11 +1526,16 @@ export default function App() {
                     className="w-24 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center"
                   />
                   <input
+                    ref={wchcSeatInputRef}
                     type="text"
                     placeholder="Seat No (E.G. 2A)"
                     value={formData.wchcSeat}
                     onChange={(e) => setFormData({ ...formData, wchcSeat: e.target.value.toUpperCase() })}
-                    className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
+                    className={`flex-1 p-2.5 border rounded-xl bg-slate-800/90 text-white focus:outline-none text-sm uppercase ${
+                      parseInt(formData.wchcFig, 10) > 0 && isZeroOrEmptyVal(formData.wchcSeat)
+                        ? 'border-rose-500 focus:border-rose-400'
+                        : 'border-slate-700 focus:border-amber-400'
+                    }`}
                   />
                 </div>
               </div>
@@ -1450,23 +1600,46 @@ export default function App() {
                   NOSHOW FIGURE (COUNTER)
                 </label>
                 <input
-                  type="number"
-                  placeholder="ENTER COUNTER NOSHOW FIGURE"
+                  ref={counterNoshowInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={2}
+                  placeholder="ONLY DIGIT"
                   value={formData.counterNoshow}
-                  onChange={(e) => setFormData({ ...formData, counterNoshow: e.target.value })}
-                  className="p-2.5 border border-rose-500/50 rounded-xl bg-slate-800/90 text-white focus:border-rose-400 focus:outline-none text-sm uppercase"
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
+                    setFormData({ ...formData, counterNoshow: digits });
+                    if (digits && parseInt(digits, 10) > 0) {
+                      setNoCounterNoshowConfirmed(false);
+                    } else if (digits === '0' || digits === '00') {
+                      setNoCounterNoshowConfirmed(false);
+                      setPendingReportType(null);
+                      setShowCounterNoshowModal(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    const val = formData.counterNoshow.trim();
+                    if ((val === '' || val === '0' || val === '00') && !noCounterNoshowConfirmed) {
+                      setPendingReportType(null);
+                      setShowCounterNoshowModal(true);
+                    }
+                  }}
+                  className="p-2.5 border border-rose-500/70 rounded-xl bg-slate-800/90 text-rose-300 font-black focus:border-rose-400 focus:outline-none text-sm uppercase"
                 />
               </div>
 
-              {/* NOSHOW PNR */}
+              {/* NOSHOW PNR (IN RED COLOR) */}
               <div className="flex flex-col">
-                <label className="font-bold text-amber-300 mb-1 tracking-wider uppercase">NOSHOW PNR</label>
+                <label className="font-black text-red-500 mb-1 tracking-wider uppercase">
+                  NOSHOW PNR {parseInt(formData.counterNoshow, 10) > 0 ? '*' : ''}
+                </label>
                 <input
+                  ref={noshowPnrInputRef}
                   type="text"
                   placeholder="ENTER NOSHOW PNR (E.G. 023AJD, P8L2M1)"
                   value={formData.noshowPnr || ''}
                   onChange={(e) => setFormData({ ...formData, noshowPnr: e.target.value.toUpperCase() })}
-                  className="p-2.5 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase font-bold"
+                  className="p-2.5 border-2 border-red-500/80 rounded-xl bg-slate-800/90 text-red-400 placeholder:text-red-400/45 focus:border-red-400 focus:outline-none text-sm uppercase font-black"
                 />
               </div>
               </div>
@@ -1668,6 +1841,52 @@ export default function App() {
         />
       )}
 
+      {/* Seat Number Warning Modal Popup (UM PAX, FIRE ARMS, WCHR, WCHC) */}
+      {seatWarningTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-amber-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
+              <AlertTriangle className="w-9 h-9" />
+            </div>
+            <h3 className="text-xl font-black text-amber-400 uppercase tracking-widest mb-2">
+              SEAT NUMBER REQUIRED!
+            </h3>
+            <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 my-4">
+              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
+                OFFICER, PLEASE FILL UP THE SEAT NUMBER
+              </p>
+            </div>
+            <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
+              YOU ENTERED A FIGURE ABOVE 0 FOR{' '}
+              {seatWarningTarget === 'umPax'
+                ? 'UM PAX'
+                : seatWarningTarget === 'fireArms'
+                ? 'FIRE ARMS'
+                : seatWarningTarget === 'wchr'
+                ? 'WCHR'
+                : 'WCHC'}
+              . PLEASE INPUT THE SEAT NUMBER BEFORE PROCEEDING.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const target = seatWarningTarget;
+                setSeatWarningTarget(null);
+                setTimeout(() => {
+                  if (target === 'umPax') umPaxSeatInputRef.current?.focus();
+                  else if (target === 'fireArms') fireArmsSeatInputRef.current?.focus();
+                  else if (target === 'wchr') wchrSeatInputRef.current?.focus();
+                  else if (target === 'wchc') wchcSeatInputRef.current?.focus();
+                }, 100);
+              }}
+              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
+            >
+              OK, I WILL FILL UP NOW
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Delay Warning Modal Popup */}
       {delayWarningModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
@@ -1698,6 +1917,69 @@ export default function App() {
             >
               OK, I WILL FILL UP NOW
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Counter Noshow 0 / Skip Confirmation Modal */}
+      {showCounterNoshowModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border-2 border-rose-400 text-rose-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
+              <AlertTriangle className="w-9 h-9" />
+            </div>
+            <h3 className="text-xl font-black text-rose-400 uppercase tracking-widest mb-2">
+              COUNTER NOSHOW ALERT
+            </h3>
+            <div className="bg-rose-500/15 border border-rose-500/40 rounded-2xl p-4 my-4">
+              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
+                OFFICER, CONFIRM AGAIN, THERE HAVE NO COUNTER NOSHOW !!
+              </p>
+            </div>
+            <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
+              CLICK YES TO INPUT COUNTER NOSHOW FIGURE (MAX 02 DIGIT), OR NO IF THERE IS NO COUNTER NOSHOW.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCounterNoshowModal(false);
+                  setNoCounterNoshowConfirmed(false);
+                  setFormData((prev) => ({
+                    ...prev,
+                    counterNoshow:
+                      prev.counterNoshow === '0' || prev.counterNoshow === '00'
+                        ? ''
+                        : prev.counterNoshow,
+                  }));
+                  setTimeout(() => {
+                    counterNoshowInputRef.current?.focus();
+                  }, 100);
+                }}
+                className="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-white font-black tracking-widest text-sm uppercase shadow-lg cursor-pointer transition-all active:scale-95"
+              >
+                YES
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCounterNoshowModal(false);
+                  setNoCounterNoshowConfirmed(true);
+                  setFormData((prev) => ({
+                    ...prev,
+                    counterNoshow: '0',
+                  }));
+                  if (pendingReportType) {
+                    const targetType = pendingReportType;
+                    setPendingReportType(null);
+                    handleGenerateReport(targetType, true);
+                  }
+                }}
+                className="flex-1 py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-black tracking-widest text-sm uppercase shadow-lg cursor-pointer transition-all active:scale-95"
+              >
+                NO
+              </button>
+            </div>
           </div>
         </div>
       )}

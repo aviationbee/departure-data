@@ -88,8 +88,8 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
   const maasDisplay = formatFig(data.maas);
   const wchrDisplay = formatFig(data.wchrFig, data.wchrSeat);
   const wchcDisplay = formatFig(data.wchcFig, data.wchcSeat);
-  const umPaxDisplay = formatFig(data.umPax);
-  const fireArmsDisplay = isZeroOrEmpty(data.fireArms) ? 'NIL' : data.fireArms.trim().toUpperCase();
+  const umPaxDisplay = formatFig(data.umPax, data.umPaxSeat);
+  const fireArmsDisplay = formatFig(data.fireArms, data.fireArmsSeat);
   const counterNoshowNum = parseInt(data.counterNoshow, 10);
   const counterNoshowDisplay =
     !isNaN(counterNoshowNum) && counterNoshowNum > 0

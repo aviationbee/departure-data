@@ -50,7 +50,9 @@ export interface FlightFormData {
   cip: string;
   maas: string;
   umPax: string;
+  umPaxSeat?: string;
   fireArms: string;
+  fireArmsSeat?: string;
   wchrFig: string;
   wchrSeat: string;
   wchcFig: string;

@@ -19,9 +19,21 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
   const passengerString = `LOAD-${data.flightLoad || '0'}   ACTUAL-${data.paxMale || '0'}+${data.paxFemale || '0'}+${data.paxChild || '0'}+${data.paxInfant || '0'} =${data.paxTotal || '0'}+${data.paxInfant || '0'}`;
   const bagMailCgoString = `BAG: ${data.baggagePcs || '0'} PCS/${data.baggageWeight || '0'} KGS   MAIL: ${(data.mail || '0').toUpperCase()}   CGO: ${data.cargoPcs || '0'} PCS/${data.cargoWeight || '0'} KGS`;
 
+  // Helper: treat empty, '0', '00', 'NIL', 'N/A' as empty
+  const isZeroOrEmpty = (val?: string): boolean => {
+    if (!val) return true;
+    const trimmed = val.trim().toUpperCase();
+    if (trimmed === '' || trimmed === 'NIL' || trimmed === 'N/A' || trimmed === '-') return true;
+    if (/^0+$/.test(trimmed)) return true;
+    return false;
+  };
+
   const specialHandlingParts: string[] = [];
   if (parseInt(data.maas || '0', 10) > 0) specialHandlingParts.push(`MAAS: ${data.maas}`);
-  if (parseInt(data.umPax || '0', 10) > 0) specialHandlingParts.push(`UM: ${data.umPax}`);
+  if (parseInt(data.umPax || '0', 10) > 0) {
+    const umSeatStr = !isZeroOrEmpty(data.umPaxSeat) ? ` (${data.umPaxSeat!.trim().toUpperCase()})` : '';
+    specialHandlingParts.push(`UM: ${data.umPax}${umSeatStr}`);
+  }
   if (parseInt(data.vip || '0', 10) > 0) specialHandlingParts.push(`VIP: ${data.vip}`);
   if (parseInt(data.cip || '0', 10) > 0) specialHandlingParts.push(`CIP: ${data.cip}`);
   const specialHandlingOutput = specialHandlingParts.length > 0 ? specialHandlingParts.join(' / ').toUpperCase() : 'NIL';
@@ -34,15 +46,6 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
     if (parseInt(data.immigrationOff || '0', 10) > 0) offloadParts.push(`IMMI OFF ${data.immigrationOff}`);
   }
   const offloadString = offloadParts.length > 0 ? offloadParts.join(', ').toUpperCase() : 'NIL';
-
-  // Helper: treat empty, '0', '00', 'NIL', 'N/A' as empty
-  const isZeroOrEmpty = (val?: string): boolean => {
-    if (!val) return true;
-    const trimmed = val.trim().toUpperCase();
-    if (trimmed === '' || trimmed === 'NIL' || trimmed === 'N/A' || trimmed === '-') return true;
-    if (/^0+$/.test(trimmed)) return true;
-    return false;
-  };
 
   // NOSHOW: Combine Counter Noshow figure and Noshow PNR if present
   const hasCounterNoshow = !isZeroOrEmpty(data.counterNoshow);
@@ -63,7 +66,14 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
       ? noshowPnrFormatted
       : 'NIL';
 
-  const fireArmsValue = data.fireArms && data.fireArms.trim() ? data.fireArms.toUpperCase() : 'NIL';
+  const fireArmsNum = parseInt(data.fireArms, 10);
+  const hasFireArmsVal = (!isNaN(fireArmsNum) && fireArmsNum > 0) || !isZeroOrEmpty(data.fireArms);
+  const fireArmsSeatStr = !isZeroOrEmpty(data.fireArmsSeat)
+    ? ` (${data.fireArmsSeat!.trim().toUpperCase()})`
+    : '';
+  const fireArmsValue = hasFireArmsVal
+    ? `${!isNaN(fireArmsNum) ? String(fireArmsNum).padStart(2, '0') : data.fireArms.trim().toUpperCase()}${fireArmsSeatStr}`
+    : 'NIL';
   const checkInStaffValue = (data.checkInStaff || data.checkInStuff || 'N/A').toUpperCase();
   const rampOfficerValue = (data.rampOfficer || data.loadingStuff || 'N/A').toUpperCase();
   const loadControllerValue = (data.loadController || 'N/A').toUpperCase();
@@ -177,13 +187,27 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
               <td className="font-bold p-2 align-top border-r border-black">{16 + s}. FIRE ARMS</td>
               <td className="p-2">: {fireArmsValue}</td>
             </tr>
+            {/* NOSHOW */}
+            <tr className="border border-black">
+              <td className="font-bold p-2 align-top border-r border-black">{17 + s}. NOSHOW</td>
+              <td
+                className={`p-2 ${
+                  noshowValue !== 'NIL' ? 'text-red-600 font-bold' : ''
+                }`}
+              >
+                : {noshowValue}
+              </td>
+            </tr>
             {/* REMARKS */}
             <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">{17 + s}. REMARKS</td>
+              <td className="font-bold p-2 align-top border-r border-black">{18 + s}. REMARKS</td>
               <td className="p-2 leading-relaxed">
                 : &bull; OFFLOAD: {offloadString}
                 <br />
-                &bull; NOSHOW: {noshowValue}
+                &bull; NOSHOW:{' '}
+                <span className={noshowValue !== 'NIL' ? 'text-red-600 font-bold' : ''}>
+                  {noshowValue}
+                </span>
                 {data.remarks && data.remarks.trim() && (
                   <div className="mt-0.5 font-semibold text-black uppercase">
                     : {data.remarks.trim().toUpperCase()}
