@@ -201,6 +201,7 @@ export default function App() {
   const [showNewReportModal, setShowNewReportModal] = useState(false);
   const [showCounterNoshowModal, setShowCounterNoshowModal] = useState(false);
   const [noCounterNoshowConfirmed, setNoCounterNoshowConfirmed] = useState(false);
+  const [showNoshowPnrWarningModal, setShowNoshowPnrWarningModal] = useState(false);
   const [pendingReportType, setPendingReportType] = useState<'intl' | 'dom' | null>(null);
   const [seatWarningTarget, setSeatWarningTarget] = useState<'umPax' | 'fireArms' | 'wchr' | 'wchc' | null>(null);
   const delayReasonInputRef = React.useRef<HTMLInputElement>(null);
@@ -376,6 +377,15 @@ export default function App() {
     return false;
   };
 
+  // Validate 6-character alphanumeric PNR (e.g. 024UGD, 03ERUF, 0345VD, 1DHUR2, 161GPX)
+  const isValidNoshowPnr = (val?: string): boolean => {
+    if (!val) return false;
+    const trimmed = val.trim().toUpperCase();
+    if (trimmed === '' || trimmed === 'NIL' || trimmed === 'N/A' || trimmed === '-') return false;
+    if (/^0+$/.test(trimmed)) return false;
+    return /\b[A-Z0-9]{6}\b/.test(trimmed);
+  };
+
   const handleGenerateReport = (type: 'intl' | 'dom', bypassCounterZeroConfirm = false) => {
     if (!validateDelayReason()) return;
 
@@ -418,10 +428,9 @@ export default function App() {
       return;
     }
 
-    // 6. If Counter Noshow > 0, user MUST input PNR number in NOSHOW PNR box
-    if (!isNaN(counterNum) && counterNum > 0 && isZeroOrEmptyVal(formData.noshowPnr)) {
-      showToast('OFFICER, PLEASE INPUT PNR NUMBER IN NOSHOW PNR BOX!');
-      setTimeout(() => noshowPnrInputRef.current?.focus(), 80);
+    // 6. If Counter Noshow > 0, user MUST input valid 6-character PNR number in NOSHOW PNR box
+    if (!isNaN(counterNum) && counterNum > 0 && !isValidNoshowPnr(formData.noshowPnr)) {
+      setShowNoshowPnrWarningModal(true);
       return;
     }
 
@@ -1617,11 +1626,19 @@ export default function App() {
                       setShowCounterNoshowModal(true);
                     }
                   }}
-                  onBlur={() => {
+                  onBlur={(e) => {
                     const val = formData.counterNoshow.trim();
+                    const num = parseInt(val, 10);
                     if ((val === '' || val === '0' || val === '00') && !noCounterNoshowConfirmed) {
                       setPendingReportType(null);
                       setShowCounterNoshowModal(true);
+                    } else if (
+                      !isNaN(num) &&
+                      num > 0 &&
+                      e.relatedTarget !== noshowPnrInputRef.current &&
+                      !isValidNoshowPnr(formData.noshowPnr)
+                    ) {
+                      setShowNoshowPnrWarningModal(true);
                     }
                   }}
                   className="p-2.5 border border-rose-500/70 rounded-xl bg-slate-800/90 text-rose-300 font-black focus:border-rose-400 focus:outline-none text-sm uppercase"
@@ -1636,9 +1653,29 @@ export default function App() {
                 <input
                   ref={noshowPnrInputRef}
                   type="text"
-                  placeholder="ENTER NOSHOW PNR (E.G. 023AJD, P8L2M1)"
+                  placeholder="6-DIGIT PNR (E.G. 024UGD, 03ERUF)"
                   value={formData.noshowPnr || ''}
-                  onChange={(e) => setFormData({ ...formData, noshowPnr: e.target.value.toUpperCase() })}
+                  onChange={(e) => {
+                    const upper = e.target.value.toUpperCase();
+                    setFormData({ ...formData, noshowPnr: upper });
+                    if (
+                      parseInt(formData.counterNoshow, 10) > 0 &&
+                      (upper.trim() === '0' || upper.trim() === '00')
+                    ) {
+                      setShowNoshowPnrWarningModal(true);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const counterNum = parseInt(formData.counterNoshow, 10);
+                    if (
+                      !isNaN(counterNum) &&
+                      counterNum > 0 &&
+                      e.relatedTarget !== counterNoshowInputRef.current &&
+                      !isValidNoshowPnr(formData.noshowPnr)
+                    ) {
+                      setShowNoshowPnrWarningModal(true);
+                    }
+                  }}
                   className="p-2.5 border-2 border-red-500/80 rounded-xl bg-slate-800/90 text-red-400 placeholder:text-red-400/45 focus:border-red-400 focus:outline-none text-sm uppercase font-black"
                 />
               </div>
@@ -1651,6 +1688,12 @@ export default function App() {
                   rows={2}
                   placeholder="ENTER OPERATIONAL REMARKS (E.G. GOT DELAY DUE TO ATC CLEARANCE)"
                   value={formData.remarks}
+                  onFocus={() => {
+                    const counterNum = parseInt(formData.counterNoshow, 10);
+                    if (!isNaN(counterNum) && counterNum > 0 && !isValidNoshowPnr(formData.noshowPnr)) {
+                      setShowNoshowPnrWarningModal(true);
+                    }
+                  }}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value.toUpperCase() })}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                 />
@@ -1665,6 +1708,12 @@ export default function App() {
                   rows={4}
                   placeholder="PASTE VIP / MAAS / WCHR PASSENGER LIST COPIED FROM FLIGHT DCS (FLST) SYSTEM HERE..."
                   value={formData.flstRawMessage || ''}
+                  onFocus={() => {
+                    const counterNum = parseInt(formData.counterNoshow, 10);
+                    if (!isNaN(counterNum) && counterNum > 0 && !isValidNoshowPnr(formData.noshowPnr)) {
+                      setShowNoshowPnrWarningModal(true);
+                    }
+                  }}
                   onChange={(e) => setFormData({ ...formData, flstRawMessage: e.target.value })}
                   className="p-3 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-xs md:text-sm font-mono leading-relaxed"
                 />
@@ -1914,6 +1963,46 @@ export default function App() {
                 }, 100);
               }}
               className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
+            >
+              OK, I WILL FILL UP NOW
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* NOSHOW PNR Warning Modal Popup (When Counter Noshow > 0 and user skips or enters 0 in NOSHOW PNR) */}
+      {showNoshowPnrWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-red-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
+            <div className="w-16 h-16 rounded-2xl bg-red-500/20 border-2 border-red-400 text-red-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
+              <AlertTriangle className="w-9 h-9" />
+            </div>
+            <h3 className="text-xl font-black text-red-400 uppercase tracking-widest mb-2">
+              NOSHOW PNR REQUIRED!
+            </h3>
+            <div className="bg-red-500/15 border border-red-500/40 rounded-2xl p-4 my-4">
+              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
+                OFFICER, PLEASE FILL UP THE NOSHOW PNR BOX FIRST!
+              </p>
+            </div>
+            <p className="text-xs text-slate-300 mb-6 uppercase tracking-wider leading-relaxed">
+              YOU ENTERED COUNTER NOSHOW ABOVE 0. PLEASE INPUT VALID 6-DIGIT PNR (E.G. 024UGD, 03ERUF, 0345VD, 1DHUR2, 161GPX).
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setShowNoshowPnrWarningModal(false);
+                if (
+                  formData.noshowPnr &&
+                  (formData.noshowPnr.trim() === '0' || formData.noshowPnr.trim() === '00')
+                ) {
+                  setFormData((prev) => ({ ...prev, noshowPnr: '' }));
+                }
+                setTimeout(() => {
+                  noshowPnrInputRef.current?.focus();
+                }, 100);
+              }}
+              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
             >
               OK, I WILL FILL UP NOW
             </button>
