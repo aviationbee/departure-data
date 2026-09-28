@@ -377,16 +377,18 @@ export default function App() {
     return false;
   };
 
-  // Validate 6-character alphanumeric PNR (e.g. 024UGD, 03ERUF, 0345VD, 1DHUR2, 161GPX)
+  // Validate 6-character alphanumeric PNR per PNR (e.g. 024UGD, 03ERUF, 0345VD, 1DHUR2, 161GPX)
   const isValidNoshowPnr = (val?: string): boolean => {
     if (!val) return false;
     const trimmed = val.trim().toUpperCase();
     if (trimmed === '' || trimmed === 'NIL' || trimmed === 'N/A' || trimmed === '-') return false;
     if (/^0+$/.test(trimmed)) return false;
-    return /\b[A-Z0-9]{6}\b/.test(trimmed);
+    const tokens = trimmed.split(/[\s,/]+/).filter(Boolean);
+    if (tokens.length === 0) return false;
+    return tokens.every((t) => /^[A-Z0-9]{6}$/.test(t));
   };
 
-  const handleGenerateReport = (type: 'intl' | 'dom', bypassCounterZeroConfirm = false) => {
+  const handleGenerateReport = (type: 'intl' | 'dom') => {
     if (!validateDelayReason()) return;
 
     // 1. Validate UM PAX Seat Number if UM PAX > 0
@@ -418,18 +420,15 @@ export default function App() {
       return;
     }
 
-    // 5. Check Counter Noshow: if 0 or skipped, show confirmation popup
-    const counterNum = parseInt(formData.counterNoshow, 10);
-    const isCounterZeroOrSkipped = isNaN(counterNum) || counterNum === 0;
-
-    if (isCounterZeroOrSkipped && !noCounterNoshowConfirmed && !bypassCounterZeroConfirm) {
-      setPendingReportType(type);
+    // 5. Check Counter Noshow: if blank, show "THIS FIELD CAN NOT BE BLANK" popup
+    if (formData.counterNoshow.trim() === '') {
       setShowCounterNoshowModal(true);
       return;
     }
 
-    // 6. If Counter Noshow > 0, user MUST input valid 6-character PNR number in NOSHOW PNR box
-    if (!isNaN(counterNum) && counterNum > 0 && !isValidNoshowPnr(formData.noshowPnr)) {
+    // 6. If Counter Noshow >= 1, user MUST input valid 6-character PNR number in NOSHOW PNR box
+    const counterNum = parseInt(formData.counterNoshow, 10);
+    if (!isNaN(counterNum) && counterNum >= 1 && !isValidNoshowPnr(formData.noshowPnr)) {
       setShowNoshowPnrWarningModal(true);
       return;
     }
@@ -1618,23 +1617,15 @@ export default function App() {
                   onChange={(e) => {
                     const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
                     setFormData({ ...formData, counterNoshow: digits });
-                    if (digits && parseInt(digits, 10) > 0) {
-                      setNoCounterNoshowConfirmed(false);
-                    } else if (digits === '0' || digits === '00') {
-                      setNoCounterNoshowConfirmed(false);
-                      setPendingReportType(null);
-                      setShowCounterNoshowModal(true);
-                    }
                   }}
                   onBlur={(e) => {
                     const val = formData.counterNoshow.trim();
                     const num = parseInt(val, 10);
-                    if ((val === '' || val === '0' || val === '00') && !noCounterNoshowConfirmed) {
-                      setPendingReportType(null);
+                    if (val === '') {
                       setShowCounterNoshowModal(true);
                     } else if (
                       !isNaN(num) &&
-                      num > 0 &&
+                      num >= 1 &&
                       e.relatedTarget !== noshowPnrInputRef.current &&
                       !isValidNoshowPnr(formData.noshowPnr)
                     ) {
@@ -1648,18 +1639,23 @@ export default function App() {
               {/* NOSHOW PNR (IN RED COLOR) */}
               <div className="flex flex-col">
                 <label className="font-black text-red-500 mb-1 tracking-wider uppercase">
-                  NOSHOW PNR {parseInt(formData.counterNoshow, 10) > 0 ? '*' : ''}
+                  NOSHOW PNR *
                 </label>
                 <input
                   ref={noshowPnrInputRef}
                   type="text"
                   placeholder="6-DIGIT PNR (E.G. 024UGD, 03ERUF)"
                   value={formData.noshowPnr || ''}
+                  onFocus={() => {
+                    if (formData.counterNoshow.trim() === '') {
+                      setShowCounterNoshowModal(true);
+                    }
+                  }}
                   onChange={(e) => {
                     const upper = e.target.value.toUpperCase();
                     setFormData({ ...formData, noshowPnr: upper });
                     if (
-                      parseInt(formData.counterNoshow, 10) > 0 &&
+                      parseInt(formData.counterNoshow, 10) >= 1 &&
                       (upper.trim() === '0' || upper.trim() === '00')
                     ) {
                       setShowNoshowPnrWarningModal(true);
@@ -1669,7 +1665,7 @@ export default function App() {
                     const counterNum = parseInt(formData.counterNoshow, 10);
                     if (
                       !isNaN(counterNum) &&
-                      counterNum > 0 &&
+                      counterNum >= 1 &&
                       e.relatedTarget !== counterNoshowInputRef.current &&
                       !isValidNoshowPnr(formData.noshowPnr)
                     ) {
@@ -1689,8 +1685,12 @@ export default function App() {
                   placeholder="ENTER OPERATIONAL REMARKS (E.G. GOT DELAY DUE TO ATC CLEARANCE)"
                   value={formData.remarks}
                   onFocus={() => {
+                    if (formData.counterNoshow.trim() === '') {
+                      setShowCounterNoshowModal(true);
+                      return;
+                    }
                     const counterNum = parseInt(formData.counterNoshow, 10);
-                    if (!isNaN(counterNum) && counterNum > 0 && !isValidNoshowPnr(formData.noshowPnr)) {
+                    if (!isNaN(counterNum) && counterNum >= 1 && !isValidNoshowPnr(formData.noshowPnr)) {
                       setShowNoshowPnrWarningModal(true);
                     }
                   }}
@@ -1709,8 +1709,12 @@ export default function App() {
                   placeholder="PASTE VIP / MAAS / WCHR PASSENGER LIST COPIED FROM FLIGHT DCS (FLST) SYSTEM HERE..."
                   value={formData.flstRawMessage || ''}
                   onFocus={() => {
+                    if (formData.counterNoshow.trim() === '') {
+                      setShowCounterNoshowModal(true);
+                      return;
+                    }
                     const counterNum = parseInt(formData.counterNoshow, 10);
-                    if (!isNaN(counterNum) && counterNum > 0 && !isValidNoshowPnr(formData.noshowPnr)) {
+                    if (!isNaN(counterNum) && counterNum >= 1 && !isValidNoshowPnr(formData.noshowPnr)) {
                       setShowNoshowPnrWarningModal(true);
                     }
                   }}
@@ -1970,7 +1974,7 @@ export default function App() {
         </div>
       )}
 
-      {/* NOSHOW PNR Warning Modal Popup (When Counter Noshow > 0 and user skips or enters 0 in NOSHOW PNR) */}
+      {/* NOSHOW PNR Warning Modal Popup (When Counter Noshow >= 1 and user tries to skip NOSHOW PNR) */}
       {showNoshowPnrWarningModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
           <div className="bg-slate-900 border-2 border-red-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
@@ -1982,11 +1986,11 @@ export default function App() {
             </h3>
             <div className="bg-red-500/15 border border-red-500/40 rounded-2xl p-4 my-4">
               <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
-                OFFICER, PLEASE FILL UP THE NOSHOW PNR BOX FIRST!
+                YOU HAVE TO INPUT PNR NUMBER
               </p>
             </div>
             <p className="text-xs text-slate-300 mb-6 uppercase tracking-wider leading-relaxed">
-              YOU ENTERED COUNTER NOSHOW ABOVE 0. PLEASE INPUT VALID 6-DIGIT PNR (E.G. 024UGD, 03ERUF, 0345VD, 1DHUR2, 161GPX).
+              PLEASE INPUT 6 DIGIT PER PNR INSIDE NOSHOW PNR * BOX (E.G. 024UGD, 03ERUF, 0345VD, 1DHUR2, 161GPX).
             </p>
             <button
               type="button"
@@ -2004,13 +2008,13 @@ export default function App() {
               }}
               className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
             >
-              OK, I WILL FILL UP NOW
+              OK, I WILL INPUT PNR
             </button>
           </div>
         </div>
       )}
 
-      {/* Counter Noshow 0 / Skip Confirmation Modal */}
+      {/* Counter Noshow Blank Warning Modal */}
       {showCounterNoshowModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
           <div className="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
@@ -2018,57 +2022,28 @@ export default function App() {
               <AlertTriangle className="w-9 h-9" />
             </div>
             <h3 className="text-xl font-black text-rose-400 uppercase tracking-widest mb-2">
-              COUNTER NOSHOW ALERT
+              COUNTER NOSHOW REQUIRED!
             </h3>
             <div className="bg-rose-500/15 border border-rose-500/40 rounded-2xl p-4 my-4">
               <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
-                OFFICER, CONFIRM AGAIN, THERE HAVE NO COUNTER NOSHOW !!
+                THIS FIELD CAN NOT BE BLANK
               </p>
             </div>
             <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
-              CLICK YES TO INPUT COUNTER NOSHOW FIGURE (MAX 02 DIGIT), OR NO IF THERE IS NO COUNTER NOSHOW.
+              PLEASE INPUT 0 (IF NO COUNTER NOSHOW) OR THE COUNTER NOSHOW FIGURE (MAX 02 DIGIT).
             </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCounterNoshowModal(false);
-                  setNoCounterNoshowConfirmed(false);
-                  setFormData((prev) => ({
-                    ...prev,
-                    counterNoshow:
-                      prev.counterNoshow === '0' || prev.counterNoshow === '00'
-                        ? ''
-                        : prev.counterNoshow,
-                  }));
-                  setTimeout(() => {
-                    counterNoshowInputRef.current?.focus();
-                  }, 100);
-                }}
-                className="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-white font-black tracking-widest text-sm uppercase shadow-lg cursor-pointer transition-all active:scale-95"
-              >
-                YES
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCounterNoshowModal(false);
-                  setNoCounterNoshowConfirmed(true);
-                  setFormData((prev) => ({
-                    ...prev,
-                    counterNoshow: '0',
-                  }));
-                  if (pendingReportType) {
-                    const targetType = pendingReportType;
-                    setPendingReportType(null);
-                    handleGenerateReport(targetType, true);
-                  }
-                }}
-                className="flex-1 py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-black tracking-widest text-sm uppercase shadow-lg cursor-pointer transition-all active:scale-95"
-              >
-                NO
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCounterNoshowModal(false);
+                setTimeout(() => {
+                  counterNoshowInputRef.current?.focus();
+                }, 100);
+              }}
+              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-white font-black tracking-widest text-sm uppercase shadow-lg cursor-pointer transition-all active:scale-95"
+            >
+              OK, I WILL FILL UP NOW
+            </button>
           </div>
         </div>
       )}
