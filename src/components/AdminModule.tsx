@@ -154,12 +154,22 @@ export const AdminModule: React.FC<Props> = ({
       ([, pass]) => pass.toLowerCase() === rawPass.toLowerCase()
     );
     if (matchedOtherStation && matchedOtherStation[0] !== userStation) {
+      await logUserActivity(
+        'UNAUTHORIZED ADMIN ACCESS ATTEMPT',
+        `Officer at Station ${userStation} tried to access ${matchedOtherStation[0]} Station Admin Portal (Cross-Station Access Denied)`,
+        userInfo
+      );
       setLoginError(
         `ACCESS DENIED! YOU ARE LOGGED IN FROM ${userStation}. ONE STATION CANNOT VIEW ANOTHER STATION'S REPORT.`
       );
       return;
     }
 
+    await logUserActivity(
+      'UNAUTHORIZED ADMIN ACCESS ATTEMPT',
+      `Failed Admin login attempt from Station ${userStation} with invalid password ("${rawPass}")`,
+      userInfo
+    );
     setLoginError('INVALID ADMIN PASSWORD! PLEASE CHECK AND TRY AGAIN.');
   };
 
@@ -593,7 +603,8 @@ export const AdminModule: React.FC<Props> = ({
                   </tr>
                 ) : (
                   filteredLogs.map((log) => {
-                    const isDelete = log.action.includes('DELETE');
+                    const isDelete =
+                      log.action.includes('DELETE') || log.action.includes('UNAUTHORIZED');
                     const isLogin = log.action.includes('LOG IN');
                     const isLogout = log.action.includes('LOG OUT');
                     return (

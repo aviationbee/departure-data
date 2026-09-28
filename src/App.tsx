@@ -1081,6 +1081,28 @@ export default function App() {
 
                 <button
                   type="button"
+                  onClick={() => {
+                    const freshData: FlightFormData = {
+                      ...INITIAL_FORM_DATA,
+                      date: new Date().toISOString().split('T')[0],
+                    };
+                    setFormData(freshData);
+                    localStorage.removeItem('usba_flight_form_data');
+                    setMissingMandatoryBox(null);
+                    setSeatWarningTarget(null);
+                    setShowDelayWarningModal(false);
+                    setShowNoshowPnrWarningModal(false);
+                    showToast('FORM CLEARED! READY FOR NEW DATA INPUT.');
+                  }}
+                  className="px-3.5 py-2 text-xs rounded-xl bg-cyan-600/80 hover:bg-cyan-500 text-white border border-cyan-400/40 font-sans font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
+                  title="Clear all fields and reset form for new flight data input"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-cyan-100" />
+                  <span>CLEAR FORM</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => populateSampleData(currentPage === 'data-intl' ? 'intl' : 'dom')}
                   className="px-3.5 py-2 text-xs rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-sans font-semibold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm uppercase"
                   title="Populate test data with standard flight parameters"
