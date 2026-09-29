@@ -415,14 +415,7 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const validateDelayReason = (e?: React.FocusEvent<any> | React.MouseEvent<any>): boolean => {
-    if (showDelayBox && (!formData.delayReason || formData.delayReason.trim() === '')) {
-      if (e && 'target' in e && e.target && typeof (e.target as HTMLElement).blur === 'function') {
-        (e.target as HTMLElement).blur();
-      }
-      setDelayWarningModal(true);
-      return false;
-    }
+  const validateDelayReason = (_e?: React.FocusEvent<any> | React.MouseEvent<any>): boolean => {
     return true;
   };
 
@@ -622,7 +615,6 @@ export default function App() {
     const stopIdx =
       targetKey === 'ALL' ? fields.length : fields.findIndex((f) => f.key === targetKey);
     const limitIdx = stopIdx === -1 ? fields.length : stopIdx;
-    const airborneIdx = fields.findIndex((f) => f.key === 'airborne');
 
     for (let i = 0; i < limitIdx; i++) {
       const f = fields[i];
@@ -635,14 +627,6 @@ export default function App() {
         }
         setMissingMandatoryBox({ label: f.label, ref: f.ref });
         return false;
-      }
-      if (i === airborneIdx && limitIdx > airborneIdx) {
-        if (!validateDelayReason(e)) {
-          if (e && typeof e.stopPropagation === 'function') {
-            e.stopPropagation();
-          }
-          return false;
-        }
       }
     }
     return true;
@@ -670,7 +654,6 @@ export default function App() {
 
   const handleGenerateReport = (type: 'intl' | 'dom') => {
     if (!validateMandatoryUpTo('ALL')) return;
-    if (!validateDelayReason()) return;
 
     // 1. Validate UM PAX Seat Number if UM PAX > 0
     const umPaxNum = parseInt(formData.umPax, 10);
