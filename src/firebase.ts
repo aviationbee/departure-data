@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import {
   initializeFirestore,
+  setLogLevel,
   collection,
   doc,
   setDoc,
@@ -16,11 +17,14 @@ import {
 import firebaseConfig from '../firebase-applet-config.json';
 import { FlightFormData, UserInfo } from './types';
 
-// Initialize Firebase App & Cloud Firestore (asia-southeast1) with auto long-polling detection for airport/mobile networks
+// Suppress internal @firebase/firestore transient connection timeout warnings
+setLogLevel('silent');
+
+// Initialize Firebase App & Cloud Firestore (asia-southeast1) with forced HTTP long-polling so corporate/airport networks never hit the 10s WebChannel timeout
 const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(
   app,
-  { experimentalAutoDetectLongPolling: true },
+  { experimentalForceLongPolling: true },
   firebaseConfig.firestoreDatabaseId
 );
 
@@ -250,7 +254,7 @@ export async function saveFlightReportToCloud(
   try {
     await setDoc(doc(db, 'flight_reports', docId), payload);
   } catch (err) {
-    console.error('Firestore saveFlightReportToCloud error:', err);
+    console.warn('Firestore saveFlightReportToCloud warning:', err);
   }
 }
 
@@ -266,7 +270,7 @@ export async function deleteFlightReportFromCloud(
       actorUser
     );
   } catch (err) {
-    console.error('Firestore deleteFlightReportFromCloud error:', err);
+    console.warn('Firestore deleteFlightReportFromCloud warning:', err);
   }
 }
 
@@ -302,7 +306,7 @@ export async function saveMassReportToCloud(
       expiresAt,
     });
   } catch (err) {
-    console.error('Firestore saveMassReportToCloud error:', err);
+    console.warn('Firestore saveMassReportToCloud warning:', err);
   }
 }
 
@@ -320,7 +324,7 @@ export async function deleteMassReportFromCloud(
       userInfo
     );
   } catch (err) {
-    console.error('Firestore deleteMassReportFromCloud error:', err);
+    console.warn('Firestore deleteMassReportFromCloud warning:', err);
   }
 }
 
@@ -344,7 +348,7 @@ export async function logUserActivity(
     });
     await syncRealtimeDataOnActivity(true);
   } catch (err) {
-    console.error('Firestore logUserActivity error:', err);
+    console.warn('Firestore logUserActivity warning:', err);
   }
 }
 
@@ -365,7 +369,7 @@ export async function circulateAdminNotice(
       createdBy: createdBy.toUpperCase(),
     });
   } catch (err) {
-    console.error('Firestore circulateAdminNotice error:', err);
+    console.warn('Firestore circulateAdminNotice warning:', err);
   }
 }
 
@@ -389,7 +393,7 @@ export function subscribeToFlightReports(
       callback(list);
     },
     (err) => {
-      console.error('Error subscribing to flight_reports:', err);
+      console.warn('Warning subscribing to flight_reports:', err);
     }
   );
   return () => {
@@ -419,7 +423,7 @@ export function subscribeToActivityLogs(
       callback(list);
     },
     (err) => {
-      console.error('Error subscribing to activity_logs:', err);
+      console.warn('Warning subscribing to activity_logs:', err);
     }
   );
   return () => {
@@ -444,7 +448,7 @@ export function subscribeToSystemNotice(
       }
     },
     (err) => {
-      console.error('Error subscribing to system_notices:', err);
+      console.warn('Warning subscribing to system_notices:', err);
     }
   );
   return () => {
