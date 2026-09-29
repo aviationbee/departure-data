@@ -200,29 +200,28 @@ export default function App() {
     const saved = localStorage.getItem('usba_flight_form_data');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed.configure === 'string' && /^00\/00\/\d+$/.test(parsed.configure.trim())) {
+          parsed.configure = '';
+        }
+        return parsed;
       } catch (e) {}
     }
     return INITIAL_FORM_DATA;
   });
 
   const [showDelayBox, setShowDelayBox] = useState(false);
-  const [delayWarningModal, setDelayWarningModal] = useState(false);
   const [showNewReportModal, setShowNewReportModal] = useState(false);
-  const [showCounterNoshowModal, setShowCounterNoshowModal] = useState(false);
-  const [noCounterNoshowConfirmed, setNoCounterNoshowConfirmed] = useState(false);
-  const [showNoshowPnrWarningModal, setShowNoshowPnrWarningModal] = useState(false);
-  const [pendingReportType, setPendingReportType] = useState<'intl' | 'dom' | null>(null);
+  const [highlightRedBoxes, setHighlightRedBoxes] = useState(false);
+  const [visitedNoshowPnr, setVisitedNoshowPnr] = useState(false);
+  const [showRedBoxWarningModal, setShowRedBoxWarningModal] = useState(false);
+  const missingMandatoryBox: string | null = null;
+  void missingMandatoryBox;
   const [pageHistory, setPageHistory] = useState<PageMode[]>([]);
   const [liveNotice, setLiveNotice] = useState<SystemNoticeDoc | null>(null);
   const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
   });
-  const [seatWarningTarget, setSeatWarningTarget] = useState<'umPax' | 'fireArms' | 'wchr' | 'wchc' | null>(null);
-  const [missingMandatoryBox, setMissingMandatoryBox] = useState<{
-    label: string;
-    ref: React.RefObject<HTMLInputElement | null>;
-  } | null>(null);
   const flightNoInputRef = React.useRef<HTMLInputElement>(null);
   const acRegInputRef = React.useRef<HTMLInputElement>(null);
   const captainInputRef = React.useRef<HTMLInputElement>(null);
@@ -472,7 +471,7 @@ export default function App() {
     }));
   };
 
-  // Handle Reg Change -> auto AC Type & Seats
+  // Handle Reg Change -> auto AC Type only (leave CONFIGURE / CREW COUNT watermark as "2/2")
   const handleRegChange = (val: string) => {
     const upper = val.toUpperCase().trim().replace(/^(S2-|HS-|PK-)/, '').slice(0, 3);
     const details = getAircraftDetails(upper);
@@ -480,7 +479,7 @@ export default function App() {
       ...prev,
       acRegSuffix: upper,
       acType: details.type || prev.acType,
-      configure: prev.configure || (details.seat ? `00/00/${details.seat}` : ''),
+      configure: /^00\/00\/\d+$/.test((prev.configure || '').trim()) ? '' : prev.configure,
     }));
   };
 
@@ -506,7 +505,9 @@ export default function App() {
       loadController: prev.loadController,
     }));
     setShowDelayBox(false);
-    setDelayWarningModal(false);
+    setHighlightRedBoxes(false);
+    setVisitedNoshowPnr(false);
+    setShowRedBoxWarningModal(false);
   };
 
   // Navigation handlers
@@ -538,162 +539,50 @@ export default function App() {
     return false;
   };
 
-  // Validate 6-character alphanumeric PNR per PNR (e.g. 024UGD, 03ERUF, 0345VD, 1DHUR2, 161GPX)
-  const isValidNoshowPnr = (val?: string): boolean => {
-    if (!val) return false;
-    const trimmed = val.trim().toUpperCase();
-    if (trimmed === '' || trimmed === 'NIL' || trimmed === 'N/A' || trimmed === '-') return false;
-    if (/^0+$/.test(trimmed)) return false;
-    const tokens = trimmed.split(/[\s,/]+/).filter(Boolean);
-    if (tokens.length === 0) return false;
-    return tokens.every((t) => /^[A-Z0-9]{6}$/.test(t));
-  };
-
   const isOutstation = (userInfo.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
 
-  const getMandatoryFields = () => {
-    const list: {
-      key: string;
-      label: string;
-      value: string | undefined;
-      ref: React.RefObject<HTMLInputElement | null>;
-    }[] = [
-      { key: 'flightNo', label: 'FLIGHT NO', value: formData.flightNoSuffix, ref: flightNoInputRef },
-      { key: 'acReg', label: 'A/C REG', value: formData.acRegSuffix, ref: acRegInputRef },
-      { key: 'captain', label: 'CAPTAIN', value: formData.captain, ref: captainInputRef },
-      {
-        key: 'configure',
-        label: 'CONFIGURE / CREW COUNT',
-        value: formData.configure,
-        ref: configureInputRef,
-      },
-    ];
+  // Option A Required Boxes: CAPTAIN, CONFIGURE / CREW COUNT, DELAY REASON (if delayed), BAGGAGE, NOSHOW PNR * (if NOSHOW FIGURE >= 1)
+  const isCaptainMissing = !formData.captain || formData.captain.trim() === '';
+  const isConfigureMissing = !formData.configure || formData.configure.trim() === '';
+  const isDelayReasonMissing =
+    showDelayBox && (!formData.delayReason || formData.delayReason.trim() === '');
+  const isBaggageWeightMissing = !formData.baggageWeight || formData.baggageWeight.trim() === '';
+  const isBaggagePcsMissing = !formData.baggagePcs || formData.baggagePcs.trim() === '';
+  const isBaggageMissing = isBaggageWeightMissing || isBaggagePcsMissing;
+  const counterNoshowVal = parseInt(formData.counterNoshow, 10);
+  const isNoshowPnrMissing =
+    !isNaN(counterNoshowVal) &&
+    counterNoshowVal >= 1 &&
+    isZeroOrEmptyVal(formData.noshowPnr);
 
-    if (isOutstation) {
-      list.push(
-        { key: 'sta', label: 'STA (LT)', value: formData.sta, ref: staInputRef },
-        { key: 'chocksOn', label: 'C/ON (LT)', value: formData.chocksOn, ref: chocksOnInputRef },
-        { key: 'doorOpen', label: 'DOOR OPEN (LT)', value: formData.doorOpen, ref: doorOpenInputRef }
-      );
-    }
+  const hasAnyRedBoxMissing =
+    isCaptainMissing ||
+    isConfigureMissing ||
+    isDelayReasonMissing ||
+    isBaggageMissing ||
+    isNoshowPnrMissing;
 
-    list.push(
-      { key: 'std', label: 'STD (LT)', value: formData.std, ref: stdInputRef },
-      { key: 'doorClosed', label: 'DOOR CLOSED (LT)', value: formData.doorClosed, ref: doorClosedInputRef },
-      { key: 'chocksOff', label: 'CHOCKS OFF (LT)', value: formData.chocksOff, ref: chocksOffInputRef },
-      { key: 'airborne', label: 'AIRBORNE (LT)', value: formData.airborne, ref: airborneInputRef },
-      { key: 'flightLoad', label: 'FLIGHT LOAD', value: formData.flightLoad, ref: flightLoadInputRef },
-      { key: 'paxMale', label: 'PASSENGERS (M)', value: formData.paxMale, ref: paxMaleInputRef },
-      { key: 'paxFemale', label: 'PASSENGERS (F)', value: formData.paxFemale, ref: paxFemaleInputRef },
-      { key: 'paxChild', label: 'PASSENGERS (C)', value: formData.paxChild, ref: paxChildInputRef },
-      { key: 'paxInfant', label: 'PASSENGERS (I)', value: formData.paxInfant, ref: paxInfantInputRef },
-      { key: 'fuelUplift', label: 'FUEL UPLIFT', value: formData.fuelUplift, ref: fuelUpliftInputRef },
-      {
-        key: 'baggageWeight',
-        label: 'BAGGAGE (WEIGHT KG)',
-        value: formData.baggageWeight,
-        ref: baggageWeightInputRef,
-      },
-      { key: 'baggagePcs', label: 'BAGGAGE (PCS)', value: formData.baggagePcs, ref: baggagePcsInputRef },
-      {
-        key: 'cargoWeight',
-        label: 'CARGO (WEIGHT KG)',
-        value: formData.cargoWeight,
-        ref: cargoWeightInputRef,
-      },
-      { key: 'cargoPcs', label: 'CARGO (PCS)', value: formData.cargoPcs, ref: cargoPcsInputRef }
-    );
-
-    return list;
-  };
-
-  const validateMandatoryUpTo = (
-    targetKey: string = 'ALL',
-    e?: React.FocusEvent<any> | React.MouseEvent<any>
-  ): boolean => {
-    const fields = getMandatoryFields();
-    const stopIdx =
-      targetKey === 'ALL' ? fields.length : fields.findIndex((f) => f.key === targetKey);
-    const limitIdx = stopIdx === -1 ? fields.length : stopIdx;
-
-    for (let i = 0; i < limitIdx; i++) {
-      const f = fields[i];
-      if (!f.value || f.value.trim() === '') {
-        if (e && 'target' in e && e.target && typeof (e.target as HTMLElement).blur === 'function') {
-          (e.target as HTMLElement).blur();
-        }
-        if (e && typeof e.stopPropagation === 'function') {
-          e.stopPropagation();
-        }
-        setMissingMandatoryBox({ label: f.label, ref: f.ref });
-        return false;
-      }
-    }
-    return true;
+  const focusFirstRedBox = () => {
+    if (isCaptainMissing) captainInputRef.current?.focus();
+    else if (isConfigureMissing) configureInputRef.current?.focus();
+    else if (isDelayReasonMissing) delayReasonInputRef.current?.focus();
+    else if (isBaggageWeightMissing) baggageWeightInputRef.current?.focus();
+    else if (isBaggagePcsMissing) baggagePcsInputRef.current?.focus();
+    else if (isNoshowPnrMissing) noshowPnrInputRef.current?.focus();
   };
 
   const handleGridFocusCapture = (e: React.FocusEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
-    if ((target as HTMLInputElement).readOnly) return;
-
-    const mandatoryKey = target.getAttribute('data-mandatory-key');
-    if (mandatoryKey === 'date') return;
-    if (mandatoryKey === 'delayReason') {
-      validateMandatoryUpTo('flightLoad', e);
-      return;
+    if (visitedNoshowPnr && target !== noshowPnrInputRef.current) {
+      setHighlightRedBoxes(true);
     }
-    if (mandatoryKey) {
-      validateMandatoryUpTo(mandatoryKey, e);
-      return;
-    }
-
-    // Any field after CARGO PCS validates all mandatory fields first
-    validateMandatoryUpTo('ALL', e);
   };
 
   const handleGenerateReport = (type: 'intl' | 'dom') => {
-    if (!validateMandatoryUpTo('ALL')) return;
-
-    // 1. Validate UM PAX Seat Number if UM PAX > 0
-    const umPaxNum = parseInt(formData.umPax, 10);
-    if (!isNaN(umPaxNum) && umPaxNum > 0 && isZeroOrEmptyVal(formData.umPaxSeat)) {
-      setSeatWarningTarget('umPax');
-      return;
-    }
-
-    // 2. Validate FIRE ARMS Seat Number if FIRE ARMS > 0
-    const fireArmsNum = parseInt(formData.fireArms, 10);
-    const hasFireArms = (!isNaN(fireArmsNum) && fireArmsNum > 0) || !isZeroOrEmptyVal(formData.fireArms);
-    if (hasFireArms && isZeroOrEmptyVal(formData.fireArmsSeat)) {
-      setSeatWarningTarget('fireArms');
-      return;
-    }
-
-    // 3. Validate WCHR Seat Number if WCHR > 0
-    const wchrNum = parseInt(formData.wchrFig, 10);
-    if (!isNaN(wchrNum) && wchrNum > 0 && isZeroOrEmptyVal(formData.wchrSeat)) {
-      setSeatWarningTarget('wchr');
-      return;
-    }
-
-    // 4. Validate WCHC Seat Number if WCHC > 0
-    const wchcNum = parseInt(formData.wchcFig, 10);
-    if (!isNaN(wchcNum) && wchcNum > 0 && isZeroOrEmptyVal(formData.wchcSeat)) {
-      setSeatWarningTarget('wchc');
-      return;
-    }
-
-    // 5. Check Counter Noshow: if blank, show "THIS FIELD CAN NOT BE BLANK" popup
-    if (formData.counterNoshow.trim() === '') {
-      setShowCounterNoshowModal(true);
-      return;
-    }
-
-    // 6. If Counter Noshow >= 1, user MUST input valid 6-character PNR number in NOSHOW PNR box
-    const counterNum = parseInt(formData.counterNoshow, 10);
-    if (!isNaN(counterNum) && counterNum >= 1 && !isValidNoshowPnr(formData.noshowPnr)) {
-      setShowNoshowPnrWarningModal(true);
+    if (hasAnyRedBoxMissing) {
+      setHighlightRedBoxes(true);
+      setShowRedBoxWarningModal(true);
       return;
     }
 
@@ -1100,10 +989,9 @@ export default function App() {
                     };
                     setFormData(freshData);
                     localStorage.removeItem('usba_flight_form_data');
-                    setMissingMandatoryBox(null);
-                    setSeatWarningTarget(null);
-                    setShowDelayWarningModal(false);
-                    setShowNoshowPnrWarningModal(false);
+                    setHighlightRedBoxes(false);
+                    setVisitedNoshowPnr(false);
+                    setShowRedBoxWarningModal(false);
                     showToast('FORM CLEARED! READY FOR NEW DATA INPUT.');
                   }}
                   className="px-3.5 py-2 text-xs rounded-xl bg-cyan-600/80 hover:bg-cyan-500 text-white border border-cyan-400/40 font-sans font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
@@ -1222,7 +1110,13 @@ export default function App() {
 
               {/* CAPTAIN */}
               <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">CAPTAIN</label>
+                <label
+                  className={`font-bold mb-1 tracking-wider ${
+                    highlightRedBoxes && isCaptainMissing ? 'text-red-500 font-black' : 'text-slate-300'
+                  }`}
+                >
+                  CAPTAIN
+                </label>
                 <input
                   ref={captainInputRef}
                   data-mandatory-key="captain"
@@ -1231,7 +1125,11 @@ export default function App() {
                   placeholder="CAPTAIN NAME (E.G. AHMAD)"
                   value={formData.captain}
                   onChange={(e) => setFormData({ ...formData, captain: e.target.value.toUpperCase() })}
-                  className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
+                  className={`p-2.5 rounded-xl text-white focus:outline-none text-sm uppercase ${
+                    highlightRedBoxes && isCaptainMissing
+                      ? 'border-2 border-red-500 ring-2 ring-red-500/60 bg-red-950/40 shadow-[0_0_15px_rgba(239,68,68,0.45)]'
+                      : 'border border-slate-700 bg-slate-800/90 focus:border-amber-400'
+                  }`}
                 />
                 <datalist id="captain-options">
                   {CAPTAIN_SUGGESTIONS.map((c) => (
@@ -1242,7 +1140,11 @@ export default function App() {
 
               {/* CONFIGURE / CREW COUNT */}
               <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">
+                <label
+                  className={`font-bold mb-1 tracking-wider ${
+                    highlightRedBoxes && isConfigureMissing ? 'text-red-500 font-black' : 'text-slate-300'
+                  }`}
+                >
                   CONFIGURE / CREW COUNT
                 </label>
                 <input
@@ -1252,7 +1154,11 @@ export default function App() {
                   placeholder="2/2"
                   value={formData.configure}
                   onChange={(e) => setFormData({ ...formData, configure: e.target.value.toUpperCase() })}
-                  className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
+                  className={`p-2.5 rounded-xl text-white focus:outline-none text-sm uppercase ${
+                    highlightRedBoxes && isConfigureMissing
+                      ? 'border-2 border-red-500 ring-2 ring-red-500/60 bg-red-950/40 shadow-[0_0_15px_rgba(239,68,68,0.45)]'
+                      : 'border border-slate-700 bg-slate-800/90 focus:border-amber-400'
+                  }`}
                 />
               </div>
 
@@ -1403,6 +1309,53 @@ export default function App() {
                 />
               </div>
 
+              {/* CONDITIONAL DELAY REASON BOX (Placed immediately after CHOCKS OFF (LT)) */}
+              {showDelayBox && (
+                <div
+                  className={`flex flex-col md:col-span-full p-4 rounded-xl animate-fadeIn shadow-lg ${
+                    highlightRedBoxes && isDelayReasonMissing
+                      ? 'bg-red-950/50 border-2 border-red-500 ring-2 ring-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.45)]'
+                      : 'bg-amber-500/15 border-2 border-amber-500/60'
+                  }`}
+                >
+                  <div
+                    className={`flex items-center gap-2 mb-2 font-black text-xs uppercase tracking-wider ${
+                      highlightRedBoxes && isDelayReasonMissing ? 'text-red-400' : 'text-amber-300'
+                    }`}
+                  >
+                    <AlertTriangle
+                      className={`w-4 h-4 animate-pulse ${
+                        highlightRedBoxes && isDelayReasonMissing ? 'text-red-400' : 'text-amber-400'
+                      }`}
+                    />
+                    <span>FLIGHT DELAY DETECTED &mdash; ENTER DELAY REASON (REQUIRED)</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      ref={delayReasonInputRef}
+                      data-mandatory-key="delayReason"
+                      type="text"
+                      list="delay-reason-options"
+                      placeholder="E.G. LAST PAX ACCEPTANCE, LATE INBOUND AIRCRAFT, ATC CLEARANCE"
+                      value={formData.delayReason || ''}
+                      onChange={(e) =>
+                        setFormData({ ...formData, delayReason: e.target.value.toUpperCase() })
+                      }
+                      className={`p-2.5 flex-1 rounded-xl text-white text-sm font-bold uppercase focus:outline-none placeholder:text-slate-400 ${
+                        highlightRedBoxes && isDelayReasonMissing
+                          ? 'border-2 border-red-500 ring-2 ring-red-500/60 bg-red-950/60'
+                          : 'border-2 border-amber-500 bg-slate-800 focus:ring-2 focus:ring-amber-400'
+                      }`}
+                    />
+                    <datalist id="delay-reason-options">
+                      {COMMON_DELAY_REASONS.map((r) => (
+                        <option key={r} value={r} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+              )}
+
               {/* GROUND TIME (Outstation Only - Auto Calculated from Arrival C/ON to Departure C/OFF, Not Editable) */}
               {isOutstation && (
                 <div className="flex flex-col">
@@ -1433,48 +1386,18 @@ export default function App() {
                 />
               </div>
 
-              {/* DEPARTURE STATUS */}
+              {/* DEPARTURE STATUS (CALCULATED - READ ONLY) */}
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">
                   DEPARTURE STATUS (CALCULATED)
                 </label>
                 <input
-                  data-mandatory-key="flightLoad"
                   type="text"
+                  readOnly
                   value={formData.departureStatus}
-                  onChange={(e) => setFormData({ ...formData, departureStatus: e.target.value.toUpperCase() })}
-                  className="p-2.5 border border-slate-700 rounded-xl bg-slate-800 text-amber-300 font-bold text-sm tracking-wide uppercase"
+                  className="p-2.5 border border-slate-700 rounded-xl bg-slate-900/95 text-amber-300 font-bold text-sm tracking-wide uppercase cursor-not-allowed select-none"
                 />
               </div>
-
-              {/* CONDITIONAL DELAY REASON BOX (If Flight Delayed) */}
-              {showDelayBox && (
-                <div className="flex flex-col md:col-span-full bg-amber-500/15 border-2 border-amber-500/60 p-4 rounded-xl animate-fadeIn shadow-lg">
-                  <div className="flex items-center gap-2 mb-2 text-amber-300 font-black text-xs uppercase tracking-wider">
-                    <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse" />
-                    <span>FLIGHT DELAY DETECTED &mdash; ENTER DELAY REASON (REQUIRED)</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      ref={delayReasonInputRef}
-                      data-mandatory-key="delayReason"
-                      type="text"
-                      list="delay-reason-options"
-                      placeholder="E.G. LAST PAX ACCEPTANCE, LATE INBOUND AIRCRAFT, ATC CLEARANCE"
-                      value={formData.delayReason || ''}
-                      onChange={(e) =>
-                        setFormData({ ...formData, delayReason: e.target.value.toUpperCase() })
-                      }
-                      className="p-2.5 flex-1 border-2 border-amber-500 rounded-xl bg-slate-800 text-white text-sm font-bold uppercase focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-400"
-                    />
-                    <datalist id="delay-reason-options">
-                      {COMMON_DELAY_REASONS.map((r) => (
-                        <option key={r} value={r} />
-                      ))}
-                    </datalist>
-                  </div>
-                </div>
-              )}
 
               {/* FLIGHT LOAD (BOOKED) */}
               <div className="flex flex-col">
@@ -1567,7 +1490,13 @@ export default function App() {
 
               {/* BAGGAGE */}
               <div className="flex flex-col">
-                <label className="font-bold text-slate-300 mb-1 tracking-wider">BAGGAGE</label>
+                <label
+                  className={`font-bold mb-1 tracking-wider ${
+                    highlightRedBoxes && isBaggageMissing ? 'text-red-500 font-black' : 'text-slate-300'
+                  }`}
+                >
+                  BAGGAGE
+                </label>
                 <div className="flex gap-1.5">
                   <input
                     ref={baggageWeightInputRef}
@@ -1576,7 +1505,11 @@ export default function App() {
                     placeholder="Weight (KG)"
                     value={formData.baggageWeight}
                     onChange={(e) => setFormData({ ...formData, baggageWeight: e.target.value })}
-                    className="p-2.5 flex-1 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm"
+                    className={`p-2.5 flex-1 rounded-xl text-white focus:outline-none text-sm ${
+                      highlightRedBoxes && isBaggageWeightMissing
+                        ? 'border-2 border-red-500 ring-2 ring-red-500/60 bg-red-950/40 shadow-[0_0_15px_rgba(239,68,68,0.45)]'
+                        : 'border border-slate-700 bg-slate-800/90 focus:border-amber-400'
+                    }`}
                   />
                   <input
                     ref={baggagePcsInputRef}
@@ -1585,7 +1518,11 @@ export default function App() {
                     placeholder="PCS"
                     value={formData.baggagePcs}
                     onChange={(e) => setFormData({ ...formData, baggagePcs: e.target.value })}
-                    className="p-2.5 w-20 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm text-center"
+                    className={`p-2.5 w-20 rounded-xl text-white focus:outline-none text-sm text-center ${
+                      highlightRedBoxes && isBaggagePcsMissing
+                        ? 'border-2 border-red-500 ring-2 ring-red-500/60 bg-red-950/40 shadow-[0_0_15px_rgba(239,68,68,0.45)]'
+                        : 'border border-slate-700 bg-slate-800/90 focus:border-amber-400'
+                    }`}
                   />
                 </div>
               </div>
@@ -1766,17 +1703,7 @@ export default function App() {
               </div>
 
               {/* UM PAX */}
-              <div
-                className="flex flex-col"
-                onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    const num = parseInt(formData.umPax, 10);
-                    if (!isNaN(num) && num > 0 && isZeroOrEmptyVal(formData.umPaxSeat)) {
-                      setSeatWarningTarget('umPax');
-                    }
-                  }
-                }}
-              >
+              <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">UM PAX</label>
                 <div className="flex gap-1.5">
                   <input
@@ -1794,28 +1721,13 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, umPaxSeat: e.target.value.toUpperCase() })
                     }
-                    className={`flex-1 p-2.5 border rounded-xl bg-slate-800/90 text-white focus:outline-none text-sm uppercase ${
-                      parseInt(formData.umPax, 10) > 0 && isZeroOrEmptyVal(formData.umPaxSeat)
-                        ? 'border-rose-500 focus:border-rose-400'
-                        : 'border-slate-700 focus:border-amber-400'
-                    }`}
+                    className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                   />
                 </div>
               </div>
 
               {/* FIRE ARMS */}
-              <div
-                className="flex flex-col"
-                onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    const num = parseInt(formData.fireArms, 10);
-                    const hasFa = (!isNaN(num) && num > 0) || !isZeroOrEmptyVal(formData.fireArms);
-                    if (hasFa && isZeroOrEmptyVal(formData.fireArmsSeat)) {
-                      setSeatWarningTarget('fireArms');
-                    }
-                  }
-                }}
-              >
+              <div className="flex flex-col">
                 <label className="font-bold text-amber-300 mb-1 tracking-wider uppercase">
                   FIRE ARMS
                 </label>
@@ -1835,27 +1747,13 @@ export default function App() {
                     onChange={(e) =>
                       setFormData({ ...formData, fireArmsSeat: e.target.value.toUpperCase() })
                     }
-                    className={`flex-1 p-2.5 border rounded-xl bg-slate-800/90 text-white focus:outline-none text-sm uppercase ${
-                      !isZeroOrEmptyVal(formData.fireArms) && isZeroOrEmptyVal(formData.fireArmsSeat)
-                        ? 'border-rose-500 focus:border-rose-400'
-                        : 'border-amber-500/50 focus:border-amber-400'
-                    }`}
+                    className="flex-1 p-2.5 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                   />
                 </div>
               </div>
 
               {/* WCHR */}
-              <div
-                className="flex flex-col"
-                onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    const num = parseInt(formData.wchrFig, 10);
-                    if (!isNaN(num) && num > 0 && isZeroOrEmptyVal(formData.wchrSeat)) {
-                      setSeatWarningTarget('wchr');
-                    }
-                  }
-                }}
-              >
+              <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">
                   WCHR
                 </label>
@@ -1873,27 +1771,13 @@ export default function App() {
                     placeholder="Seat No (E.G. 2A, 3A)"
                     value={formData.wchrSeat}
                     onChange={(e) => setFormData({ ...formData, wchrSeat: e.target.value.toUpperCase() })}
-                    className={`flex-1 p-2.5 border rounded-xl bg-slate-800/90 text-white focus:outline-none text-sm uppercase ${
-                      parseInt(formData.wchrFig, 10) > 0 && isZeroOrEmptyVal(formData.wchrSeat)
-                        ? 'border-rose-500 focus:border-rose-400'
-                        : 'border-slate-700 focus:border-amber-400'
-                    }`}
+                    className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                   />
                 </div>
               </div>
 
               {/* WCHC */}
-              <div
-                className="flex flex-col"
-                onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    const num = parseInt(formData.wchcFig, 10);
-                    if (!isNaN(num) && num > 0 && isZeroOrEmptyVal(formData.wchcSeat)) {
-                      setSeatWarningTarget('wchc');
-                    }
-                  }
-                }}
-              >
+              <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase">
                   WCHC
                 </label>
@@ -1911,11 +1795,7 @@ export default function App() {
                     placeholder="Seat No (E.G. 2A)"
                     value={formData.wchcSeat}
                     onChange={(e) => setFormData({ ...formData, wchcSeat: e.target.value.toUpperCase() })}
-                    className={`flex-1 p-2.5 border rounded-xl bg-slate-800/90 text-white focus:outline-none text-sm uppercase ${
-                      parseInt(formData.wchcFig, 10) > 0 && isZeroOrEmptyVal(formData.wchcSeat)
-                        ? 'border-rose-500 focus:border-rose-400'
-                        : 'border-slate-700 focus:border-amber-400'
-                    }`}
+                    className="flex-1 p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
                   />
                 </div>
               </div>
@@ -1990,27 +1870,17 @@ export default function App() {
                     const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
                     setFormData({ ...formData, counterNoshow: digits });
                   }}
-                  onBlur={(e) => {
-                    const val = formData.counterNoshow.trim();
-                    const num = parseInt(val, 10);
-                    if (val === '') {
-                      setShowCounterNoshowModal(true);
-                    } else if (
-                      !isNaN(num) &&
-                      num >= 1 &&
-                      e.relatedTarget !== noshowPnrInputRef.current &&
-                      !isValidNoshowPnr(formData.noshowPnr)
-                    ) {
-                      setShowNoshowPnrWarningModal(true);
-                    }
-                  }}
                   className="p-2.5 border border-rose-500/70 rounded-xl bg-slate-800/90 text-rose-300 font-black focus:border-rose-400 focus:outline-none text-sm uppercase"
                 />
               </div>
 
-              {/* NOSHOW PNR (IN RED COLOR) */}
+              {/* NOSHOW PNR * */}
               <div className="flex flex-col">
-                <label className="font-black text-red-500 mb-1 tracking-wider uppercase">
+                <label
+                  className={`font-black mb-1 tracking-wider uppercase ${
+                    highlightRedBoxes && isNoshowPnrMissing ? 'text-red-500' : 'text-red-400'
+                  }`}
+                >
                   NOSHOW PNR *
                 </label>
                 <input
@@ -2019,32 +1889,21 @@ export default function App() {
                   placeholder="6-DIGIT PNR (E.G. 024UGD, 03ERUF)"
                   value={formData.noshowPnr || ''}
                   onFocus={() => {
-                    if (formData.counterNoshow.trim() === '') {
-                      setShowCounterNoshowModal(true);
-                    }
+                    setVisitedNoshowPnr(true);
+                  }}
+                  onBlur={() => {
+                    setVisitedNoshowPnr(true);
+                    setHighlightRedBoxes(true);
                   }}
                   onChange={(e) => {
                     const upper = e.target.value.toUpperCase();
                     setFormData({ ...formData, noshowPnr: upper });
-                    if (
-                      parseInt(formData.counterNoshow, 10) >= 1 &&
-                      (upper.trim() === '0' || upper.trim() === '00')
-                    ) {
-                      setShowNoshowPnrWarningModal(true);
-                    }
                   }}
-                  onBlur={(e) => {
-                    const counterNum = parseInt(formData.counterNoshow, 10);
-                    if (
-                      !isNaN(counterNum) &&
-                      counterNum >= 1 &&
-                      e.relatedTarget !== counterNoshowInputRef.current &&
-                      !isValidNoshowPnr(formData.noshowPnr)
-                    ) {
-                      setShowNoshowPnrWarningModal(true);
-                    }
-                  }}
-                  className="p-2.5 border-2 border-red-500/80 rounded-xl bg-slate-800/90 text-red-400 placeholder:text-red-400/45 focus:border-red-400 focus:outline-none text-sm uppercase font-black"
+                  className={`p-2.5 rounded-xl focus:outline-none text-sm uppercase font-black ${
+                    highlightRedBoxes && isNoshowPnrMissing
+                      ? 'border-2 border-red-500 ring-2 ring-red-500/60 bg-red-950/50 text-red-300 placeholder:text-red-300/60 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
+                      : 'border border-slate-700 bg-slate-800/90 text-white placeholder:text-slate-400 focus:border-amber-400'
+                  }`}
                 />
               </div>
               </div>
@@ -2057,14 +1916,8 @@ export default function App() {
                   placeholder="ENTER OPERATIONAL REMARKS (E.G. GOT DELAY DUE TO ATC CLEARANCE)"
                   value={formData.remarks}
                   onFocus={() => {
-                    if (formData.counterNoshow.trim() === '') {
-                      setShowCounterNoshowModal(true);
-                      return;
-                    }
-                    const counterNum = parseInt(formData.counterNoshow, 10);
-                    if (!isNaN(counterNum) && counterNum >= 1 && !isValidNoshowPnr(formData.noshowPnr)) {
-                      setShowNoshowPnrWarningModal(true);
-                    }
+                    setVisitedNoshowPnr(true);
+                    setHighlightRedBoxes(true);
                   }}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value.toUpperCase() })}
                   className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-sm uppercase"
@@ -2081,14 +1934,8 @@ export default function App() {
                   placeholder="PASTE VIP / MAAS / WCHR PASSENGER LIST COPIED FROM FLIGHT DCS (FLST) SYSTEM HERE..."
                   value={formData.flstRawMessage || ''}
                   onFocus={() => {
-                    if (formData.counterNoshow.trim() === '') {
-                      setShowCounterNoshowModal(true);
-                      return;
-                    }
-                    const counterNum = parseInt(formData.counterNoshow, 10);
-                    if (!isNaN(counterNum) && counterNum >= 1 && !isValidNoshowPnr(formData.noshowPnr)) {
-                      setShowNoshowPnrWarningModal(true);
-                    }
+                    setVisitedNoshowPnr(true);
+                    setHighlightRedBoxes(true);
                   }}
                   onChange={(e) => setFormData({ ...formData, flstRawMessage: e.target.value })}
                   className="p-3 border border-amber-500/50 rounded-xl bg-slate-800/90 text-white focus:border-amber-400 focus:outline-none text-xs md:text-sm font-mono leading-relaxed"
@@ -2332,188 +2179,30 @@ export default function App() {
           </div>
         )}
 
-      {/* Mandatory Box Skipped Warning Modal Popup ("FILL UP THIS BOX") */}
-      {missingMandatoryBox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
-            <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border-2 border-rose-400 text-rose-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
-              <AlertTriangle className="w-9 h-9" />
-            </div>
-            <h3 className="text-2xl font-black text-rose-400 uppercase tracking-widest mb-2">
-              FILL UP THIS BOX
-            </h3>
-            <div className="bg-rose-500/15 border border-rose-500/40 rounded-2xl p-4 my-4">
-              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
-                FILL UP THIS BOX: <span className="text-amber-400">{missingMandatoryBox.label}</span>
-              </p>
-            </div>
-            <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
-              THIS BOX IS MANDATORY. PLEASE COMPLETE <span className="text-white font-bold">{missingMandatoryBox.label}</span> BEFORE PROCEEDING TO THE NEXT BOX.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                const targetRef = missingMandatoryBox.ref;
-                setMissingMandatoryBox(null);
-                setTimeout(() => {
-                  targetRef.current?.focus();
-                }, 100);
-              }}
-              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-slate-950 font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
-            >
-              OK, FILL UP NOW
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Seat Number Warning Modal Popup (UM PAX, FIRE ARMS, WCHR, WCHC) */}
-      {seatWarningTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-amber-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
-              <AlertTriangle className="w-9 h-9" />
-            </div>
-            <h3 className="text-xl font-black text-amber-400 uppercase tracking-widest mb-2">
-              SEAT NUMBER REQUIRED!
-            </h3>
-            <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 my-4">
-              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
-                OFFICER, PLEASE FILL UP THE SEAT NUMBER
-              </p>
-            </div>
-            <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
-              YOU ENTERED A FIGURE ABOVE 0 FOR{' '}
-              {seatWarningTarget === 'umPax'
-                ? 'UM PAX'
-                : seatWarningTarget === 'fireArms'
-                ? 'FIRE ARMS'
-                : seatWarningTarget === 'wchr'
-                ? 'WCHR'
-                : 'WCHC'}
-              . PLEASE INPUT THE SEAT NUMBER BEFORE PROCEEDING.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                const target = seatWarningTarget;
-                setSeatWarningTarget(null);
-                setTimeout(() => {
-                  if (target === 'umPax') umPaxSeatInputRef.current?.focus();
-                  else if (target === 'fireArms') fireArmsSeatInputRef.current?.focus();
-                  else if (target === 'wchr') wchrSeatInputRef.current?.focus();
-                  else if (target === 'wchc') wchcSeatInputRef.current?.focus();
-                }, 100);
-              }}
-              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
-            >
-              OK, I WILL FILL UP NOW
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Delay Warning Modal Popup */}
-      {delayWarningModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-amber-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
-              <AlertTriangle className="w-9 h-9" />
-            </div>
-            <h3 className="text-xl font-black text-amber-400 uppercase tracking-widest mb-2">
-              WARNING: FLIGHT DELAYED!
-            </h3>
-            <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 my-4">
-              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
-                OFFICER FILL UP THE DELAY REASON FIRST
-              </p>
-            </div>
-            <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
-              Please specify the delay reason in the highlighted box before proceeding with flight data entry.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setDelayWarningModal(false);
-                setTimeout(() => {
-                  delayReasonInputRef.current?.focus();
-                }, 100);
-              }}
-              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
-            >
-              OK, I WILL FILL UP NOW
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* NOSHOW PNR Warning Modal Popup (When Counter Noshow >= 1 and user tries to skip NOSHOW PNR) */}
-      {showNoshowPnrWarningModal && (
+      {/* Red Marked Box Warning Modal Popup ("OFFICER, PLEASE FILL UP THE RED MARKED BOX") */}
+      {showRedBoxWarningModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
           <div className="bg-slate-900 border-2 border-red-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
             <div className="w-16 h-16 rounded-2xl bg-red-500/20 border-2 border-red-400 text-red-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
               <AlertTriangle className="w-9 h-9" />
             </div>
             <h3 className="text-xl font-black text-red-400 uppercase tracking-widest mb-2">
-              NOSHOW PNR REQUIRED!
+              REQUIRED BOX MISSING!
             </h3>
-            <div className="bg-red-500/15 border border-red-500/40 rounded-2xl p-4 my-4">
+            <div className="bg-red-500/15 border-2 border-red-500/50 rounded-2xl p-4 my-4">
               <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
-                YOU HAVE TO INPUT PNR NUMBER
+                OFFICER, PLEASE FILL UP THE RED MARKED BOX
               </p>
             </div>
-            <p className="text-xs text-slate-300 mb-6 uppercase tracking-wider leading-relaxed">
-              PLEASE INPUT 6 DIGIT PER PNR INSIDE NOSHOW PNR * BOX (E.G. 024UGD, 03ERUF, 0345VD, 1DHUR2, 161GPX).
-            </p>
             <button
               type="button"
               onClick={() => {
-                setShowNoshowPnrWarningModal(false);
-                if (
-                  formData.noshowPnr &&
-                  (formData.noshowPnr.trim() === '0' || formData.noshowPnr.trim() === '00')
-                ) {
-                  setFormData((prev) => ({ ...prev, noshowPnr: '' }));
-                }
+                setShowRedBoxWarningModal(false);
                 setTimeout(() => {
-                  noshowPnrInputRef.current?.focus();
+                  focusFirstRedBox();
                 }, 100);
               }}
               className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-black tracking-widest text-sm uppercase shadow-xl transition-all cursor-pointer transform active:scale-95"
-            >
-              OK, I WILL INPUT PNR
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Counter Noshow Blank Warning Modal */}
-      {showCounterNoshowModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-7 text-center shadow-2xl relative uppercase">
-            <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border-2 border-rose-400 text-rose-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
-              <AlertTriangle className="w-9 h-9" />
-            </div>
-            <h3 className="text-xl font-black text-rose-400 uppercase tracking-widest mb-2">
-              COUNTER NOSHOW REQUIRED!
-            </h3>
-            <div className="bg-rose-500/15 border border-rose-500/40 rounded-2xl p-4 my-4">
-              <p className="text-base font-black text-white uppercase tracking-wider leading-snug">
-                THIS FIELD CAN NOT BE BLANK
-              </p>
-            </div>
-            <p className="text-xs text-slate-400 mb-6 uppercase tracking-wider">
-              PLEASE INPUT 0 (IF NO COUNTER NOSHOW) OR THE COUNTER NOSHOW FIGURE (MAX 02 DIGIT).
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setShowCounterNoshowModal(false);
-                setTimeout(() => {
-                  counterNoshowInputRef.current?.focus();
-                }, 100);
-              }}
-              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-white font-black tracking-widest text-sm uppercase shadow-lg cursor-pointer transition-all active:scale-95"
             >
               OK, I WILL FILL UP NOW
             </button>

@@ -414,7 +414,7 @@ USBA-${(user.usbaId || 'N/A').toUpperCase()} II DAC APT II`;
   return ldm;
 }
 
-export function parseFlstMessage(rawText?: string, data?: FlightReportData): string {
+export function parseFlstMessage(rawText?: string, data?: FlightFormData): string {
   if (!rawText || !rawText.trim()) return '';
 
   const flightNo = data?.flightNoSuffix

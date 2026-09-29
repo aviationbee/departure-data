@@ -55,7 +55,7 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
       ? String(parseInt(data.counterNoshow, 10)).padStart(2, '0')
       : data.counterNoshow.trim().toUpperCase()
     : '';
-  const noshowPnrFormatted = hasNoshowPnr ? data.noshowPnr.trim().toUpperCase() : '';
+  const noshowPnrFormatted = hasNoshowPnr ? (data.noshowPnr || '').trim().toUpperCase() : '';
 
   const noshowValue =
     hasCounterNoshow && hasNoshowPnr

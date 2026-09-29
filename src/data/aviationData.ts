@@ -238,7 +238,10 @@ export function calculateDepartureStatus(
   }
 
   if (diff > 0) {
-    const reasonText = delayReason?.trim() ? ` DUE TO ${delayReason.trim().toUpperCase()}` : '';
+    const cleanReason = delayReason?.trim()
+      ? delayReason.trim().toUpperCase().replace(/^DUE\s+TO\s+/i, '')
+      : '';
+    const reasonText = cleanReason ? ` DUE TO ${cleanReason}` : '';
     return {
       statusText: `${diff} MINS DELAY${reasonText}`,
       diffMinutes: diff,
