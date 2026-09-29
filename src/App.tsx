@@ -23,6 +23,7 @@ import {
 } from './data/aviationData';
 import { generateFlightDepartureMessage, parseFlstMessage } from './utils/reportGenerators';
 import { DepartureReportTable } from './components/DepartureReportTable';
+import { ArrivalReportTable } from './components/ArrivalReportTable';
 import { DeparturePhotoCard } from './components/DeparturePhotoCard';
 import { MassFormModule } from './components/MassFormModule';
 import { AdminModule } from './components/AdminModule';
@@ -78,6 +79,17 @@ const INITIAL_FORM_DATA: FlightFormData = {
   chocksOn: '',
   doorOpen: '',
   arrivalStatus: 'FLIGHT ON TIME ARRIVED',
+  arrPaxAdult: '',
+  arrPaxInfant: '',
+  arrBaggageWeight: '',
+  arrBaggagePcs: '',
+  arrCargoWeight: '',
+  arrCargoPcs: '',
+  arrMail: '',
+  arrVip: '',
+  arrCip: '',
+  arrMaas: '',
+  arrRemarks: '',
   std: '',
   doorClosed: '',
   chocksOff: '',
@@ -603,8 +615,18 @@ export default function App() {
     showToast(`${label} copied to clipboard!`);
   };
 
-  const printSection = (_target: 'message' | 'right') => {
+  const printSection = (target: 'message' | 'right' | 'arrival' | 'all') => {
+    if (target === 'right') {
+      document.body.setAttribute('data-print-target', 'departure');
+    } else if (target === 'arrival') {
+      document.body.setAttribute('data-print-target', 'arrival');
+    } else {
+      document.body.removeAttribute('data-print-target');
+    }
     window.print();
+    setTimeout(() => {
+      document.body.removeAttribute('data-print-target');
+    }, 500);
   };
 
   // Demo autofill for rapid testing
@@ -686,6 +708,17 @@ export default function App() {
         chocksOn: '0920',
         doorOpen: '0922',
         arrivalStatus: '10 MINS EARLY ARRIVED',
+        arrPaxAdult: '70',
+        arrPaxInfant: '02',
+        arrBaggageWeight: '420',
+        arrBaggagePcs: '48',
+        arrCargoWeight: '100',
+        arrCargoPcs: '10',
+        arrMail: '01',
+        arrVip: '2',
+        arrCip: '1',
+        arrMaas: '2',
+        arrRemarks: 'NIL',
         std: '1000',
         doorClosed: '0958',
         chocksOff: '0959',
@@ -1162,14 +1195,14 @@ export default function App() {
                 />
               </div>
 
-              {/* OUTSTATION ONLY: ARRIVAL INFORMATION BORDERED SECTION */}
+              {/* OUTSTATION ONLY: ARRIVAL INFORMATION BORDERED SECTION (SKYBLUE BACKGROUND) */}
               {isOutstation && (
-                <div className="md:col-span-full border-2 border-emerald-500/70 bg-emerald-950/20 rounded-2xl p-4 md:p-5 shadow-xl">
-                  <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-emerald-500/30">
-                    <span className="w-6 h-6 rounded-lg bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-400">
+                <div className="md:col-span-full border-2 border-sky-300 bg-sky-500/35 backdrop-blur-md rounded-2xl p-4 md:p-5 shadow-[0_0_25px_rgba(56,189,248,0.3)]">
+                  <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-sky-300/50">
+                    <span className="w-6 h-6 rounded-lg bg-sky-400/30 border border-sky-200 flex items-center justify-center text-white">
                       <Plane className="w-3.5 h-3.5 rotate-90" />
                     </span>
-                    <h3 className="text-sm md:text-base font-black tracking-widest text-emerald-400 uppercase">
+                    <h3 className="text-sm md:text-base font-black tracking-widest text-sky-100 uppercase drop-shadow">
                       ARRIVAL INFORMATION
                     </h3>
                   </div>
@@ -1177,7 +1210,7 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* 1ST BOX: STA (LT) */}
                     <div className="flex flex-col">
-                      <label className="font-bold text-emerald-300 mb-1 tracking-wider uppercase">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
                         STA (LT)
                       </label>
                       <input
@@ -1188,13 +1221,13 @@ export default function App() {
                         maxLength={4}
                         value={formData.sta || ''}
                         onChange={(e) => handleTimeInput('sta', e.target.value)}
-                        className="p-2.5 border border-emerald-600/60 rounded-xl bg-slate-800/90 text-white focus:border-emerald-400 focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
                       />
                     </div>
 
                     {/* 2ND BOX: C/ON (LT) */}
                     <div className="flex flex-col">
-                      <label className="font-bold text-emerald-300 mb-1 tracking-wider uppercase">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
                         C/ON (LT)
                       </label>
                       <input
@@ -1205,13 +1238,13 @@ export default function App() {
                         maxLength={4}
                         value={formData.chocksOn || ''}
                         onChange={(e) => handleTimeInput('chocksOn', e.target.value)}
-                        className="p-2.5 border border-emerald-600/60 rounded-xl bg-slate-800/90 text-white focus:border-emerald-400 focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
                       />
                     </div>
 
                     {/* 3RD BOX: DOOR OPEN (LT) */}
                     <div className="flex flex-col">
-                      <label className="font-bold text-emerald-300 mb-1 tracking-wider uppercase">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
                         DOOR OPEN (LT)
                       </label>
                       <input
@@ -1222,13 +1255,13 @@ export default function App() {
                         maxLength={4}
                         value={formData.doorOpen || ''}
                         onChange={(e) => handleTimeInput('doorOpen', e.target.value)}
-                        className="p-2.5 border border-emerald-600/60 rounded-xl bg-slate-800/90 text-white focus:border-emerald-400 focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-mono text-center tracking-wider font-bold"
                       />
                     </div>
 
                     {/* 4TH BOX: ARRIVAL STATUS */}
                     <div className="flex flex-col">
-                      <label className="font-bold text-emerald-300 mb-1 tracking-wider uppercase">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
                         ARRIVAL STATUS
                       </label>
                       <input
@@ -1238,7 +1271,163 @@ export default function App() {
                         onChange={(e) =>
                           setFormData({ ...formData, arrivalStatus: e.target.value.toUpperCase() })
                         }
-                        className="p-2.5 border border-emerald-500/70 rounded-xl bg-slate-800 text-emerald-300 font-bold text-sm tracking-wide uppercase"
+                        className="p-2.5 border border-sky-300/80 rounded-xl bg-slate-900/95 text-sky-300 font-bold text-sm tracking-wide uppercase"
+                      />
+                    </div>
+
+                    {/* 5TH BOX: TOTAL PAX (WITHIN 2 BOX LIKE 70+02) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        TOTAL PAX
+                      </label>
+                      <div className="flex items-center gap-1.5 bg-slate-900/90 p-1.5 border border-sky-300/70 rounded-xl">
+                        <input
+                          type="number"
+                          placeholder="70"
+                          value={formData.arrPaxAdult || ''}
+                          onChange={(e) =>
+                            setFormData({ ...formData, arrPaxAdult: e.target.value })
+                          }
+                          className="w-full min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
+                        />
+                        <span className="font-black text-sky-200 text-base px-0.5">+</span>
+                        <input
+                          type="text"
+                          placeholder="02"
+                          value={formData.arrPaxInfant || ''}
+                          onChange={(e) =>
+                            setFormData({ ...formData, arrPaxInfant: e.target.value.replace(/\D/g, '') })
+                          }
+                          className="w-20 min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 6TH BOX: BAGGAGE (2 BOX IN SINGLE BOX TYPE LIKE TOTAL PAX) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        BAGGAGE
+                      </label>
+                      <div className="flex items-center gap-1.5 bg-slate-900/90 p-1.5 border border-sky-300/70 rounded-xl">
+                        <input
+                          type="number"
+                          placeholder="Weight (KG)"
+                          value={formData.arrBaggageWeight || ''}
+                          onChange={(e) =>
+                            setFormData({ ...formData, arrBaggageWeight: e.target.value })
+                          }
+                          className="w-full min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
+                        />
+                        <span className="font-black text-sky-200 text-sm px-0.5">/</span>
+                        <input
+                          type="number"
+                          placeholder="PCS"
+                          value={formData.arrBaggagePcs || ''}
+                          onChange={(e) =>
+                            setFormData({ ...formData, arrBaggagePcs: e.target.value })
+                          }
+                          className="w-20 min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 7TH BOX: CARGO (2 BOX IN SINGLE BOX TYPE LIKE BAGGAGE) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        CARGO
+                      </label>
+                      <div className="flex items-center gap-1.5 bg-slate-900/90 p-1.5 border border-sky-300/70 rounded-xl">
+                        <input
+                          type="number"
+                          placeholder="Weight (KG)"
+                          value={formData.arrCargoWeight || ''}
+                          onChange={(e) =>
+                            setFormData({ ...formData, arrCargoWeight: e.target.value })
+                          }
+                          className="w-full min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
+                        />
+                        <span className="font-black text-sky-200 text-sm px-0.5">/</span>
+                        <input
+                          type="number"
+                          placeholder="PCS"
+                          value={formData.arrCargoPcs || ''}
+                          onChange={(e) =>
+                            setFormData({ ...formData, arrCargoPcs: e.target.value })
+                          }
+                          className="w-20 min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 8TH BOX: MAIL (HOW MANY) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        MAIL
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="HOW MANY"
+                        value={formData.arrMail || ''}
+                        onChange={(e) => setFormData({ ...formData, arrMail: e.target.value })}
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-bold"
+                      />
+                    </div>
+
+                    {/* 9TH BOX: VIP (HOW MANY) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        VIP
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="HOW MANY"
+                        value={formData.arrVip || ''}
+                        onChange={(e) => setFormData({ ...formData, arrVip: e.target.value })}
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-bold"
+                      />
+                    </div>
+
+                    {/* 10TH BOX: CIP */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        CIP
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="HOW MANY"
+                        value={formData.arrCip || ''}
+                        onChange={(e) => setFormData({ ...formData, arrCip: e.target.value })}
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-bold"
+                      />
+                    </div>
+
+                    {/* 11TH BOX: MAAS (HOW MANY) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        MAAS
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="HOW MANY"
+                        value={formData.arrMaas || ''}
+                        onChange={(e) => setFormData({ ...formData, arrMaas: e.target.value })}
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-bold"
+                      />
+                    </div>
+
+                    {/* 12TH BOX: REMARKS */}
+                    <div className="flex flex-col sm:col-span-2 lg:col-span-1">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        REMARKS
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ENTER ARRIVAL REMARKS"
+                        value={formData.arrRemarks || ''}
+                        onChange={(e) =>
+                          setFormData({ ...formData, arrRemarks: e.target.value.toUpperCase() })
+                        }
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-bold uppercase"
                       />
                     </div>
                   </div>
@@ -1249,16 +1438,16 @@ export default function App() {
               <div
                 className={
                   isOutstation
-                    ? 'md:col-span-full border-2 border-sky-500/70 bg-sky-950/20 rounded-2xl p-4 md:p-5 shadow-xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
+                    ? 'md:col-span-full border-2 border-amber-500/50 bg-slate-900/70 rounded-2xl p-4 md:p-5 shadow-xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
                     : 'contents'
                 }
               >
                 {isOutstation && (
-                  <div className="col-span-full flex items-center gap-2 mb-1 pb-2 border-b border-sky-500/30">
-                    <span className="w-6 h-6 rounded-lg bg-sky-500/20 border border-sky-400/50 flex items-center justify-center text-sky-400">
+                  <div className="col-span-full flex items-center gap-2 mb-1 pb-2 border-b border-amber-500/30">
+                    <span className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-400">
                       <Plane className="w-3.5 h-3.5" />
                     </span>
-                    <h3 className="text-sm md:text-base font-black tracking-widest text-sky-400 uppercase">
+                    <h3 className="text-sm md:text-base font-black tracking-widest text-amber-400 uppercase">
                       DEPARTURE INFORMATION
                     </h3>
                   </div>
@@ -1552,36 +1741,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* CREW BAG (Only in Intl) */}
-              {currentPage === 'data-intl' && (
-                <div className="flex flex-col">
-                  <label className="font-bold text-slate-300 mb-1 tracking-wider">CREW BAG</label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="number"
-                      placeholder="Weight"
-                      value={formData.crewBagWeight || ''}
-                      onChange={(e) => setFormData({ ...formData, crewBagWeight: e.target.value })}
-                      className="p-2.5 flex-1 border border-slate-700 rounded-xl bg-slate-800/90 text-white text-sm"
-                    />
-                    <input
-                      type="number"
-                      placeholder="PCS"
-                      value={formData.crewBagPcs || ''}
-                      onChange={(e) => setFormData({ ...formData, crewBagPcs: e.target.value })}
-                      className="p-2.5 w-16 border border-slate-700 rounded-xl bg-slate-800/90 text-white text-sm text-center"
-                    />
-                    <input
-                      type="text"
-                      placeholder="COM"
-                      value={formData.crewBagComNo || ''}
-                      onChange={(e) => setFormData({ ...formData, crewBagComNo: e.target.value.toUpperCase() })}
-                      className="p-2.5 w-20 border border-slate-700 rounded-xl bg-slate-800/90 text-white text-sm text-center uppercase"
-                    />
-                  </div>
-                </div>
-              )}
-
               {/* MAIL */}
               <div className="flex flex-col">
                 <label className="font-bold text-slate-300 mb-1 tracking-wider">MAIL</label>
@@ -1620,51 +1779,16 @@ export default function App() {
 
               {/* INTL Specific Offloads */}
               {currentPage === 'data-intl' && (
-                <>
-                  <div className="flex flex-col">
-                    <label className="font-bold text-slate-300 mb-1 tracking-wider">REFUSED</label>
-                    <input
-                      type="number"
-                      placeholder="Pax Figure"
-                      value={formData.refused || ''}
-                      onChange={(e) => setFormData({ ...formData, refused: e.target.value })}
-                      className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white text-sm"
-                    />
-                  </div>
-
-                  <div className="flex flex-col">
-                    <label className="font-bold text-slate-300 mb-1 tracking-wider">IMMIGRATION OFF</label>
-                    <input
-                      type="number"
-                      placeholder="Pax Figure"
-                      value={formData.immigrationOff || ''}
-                      onChange={(e) => setFormData({ ...formData, immigrationOff: e.target.value })}
-                      className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white text-sm"
-                    />
-                  </div>
-
-                  <div className="flex flex-col">
-                    <label className="font-bold text-slate-300 mb-1 tracking-wider">IMMIGRATION NOT FACE</label>
-                    <input
-                      type="number"
-                      placeholder="Pax Figure"
-                      value={formData.immigrationNotFace || ''}
-                      onChange={(e) => setFormData({ ...formData, immigrationNotFace: e.target.value })}
-                      className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white text-sm"
-                    />
-                  </div>
-
-                  <div className="flex flex-col">
-                    <label className="font-bold text-slate-300 mb-1 tracking-wider">CUSTOM OFF</label>
-                    <input
-                      type="number"
-                      placeholder="Pax Figure"
-                      value={formData.customOff || ''}
-                      onChange={(e) => setFormData({ ...formData, customOff: e.target.value })}
-                      className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white text-sm"
-                    />
-                  </div>
-                </>
+                <div className="flex flex-col">
+                  <label className="font-bold text-slate-300 mb-1 tracking-wider">REFUSED</label>
+                  <input
+                    type="number"
+                    placeholder="Pax Figure"
+                    value={formData.refused || ''}
+                    onChange={(e) => setFormData({ ...formData, refused: e.target.value })}
+                    className="p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-white text-sm"
+                  />
+                </div>
               )}
 
               {/* VIP & CIP */}
@@ -2008,7 +2132,7 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => printSection('right')}
+                onClick={() => printSection('all')}
                 className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -2104,6 +2228,37 @@ export default function App() {
                 />
               </div>
             </div>
+
+            {/* Panel 3: Official Arrival Report Table (Outstation Only - Printable A4 - Generated right after Official Flight Departure Report) */}
+            {isOutstation && (
+              <div
+                id="arrival-report-printable"
+                className="bg-slate-900/80 backdrop-blur-xl border border-sky-500/60 rounded-2xl p-5 shadow-2xl flex flex-col overflow-hidden"
+              >
+                <div className="no-print flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+                  <h2 className="text-base font-bold tracking-wider text-white uppercase flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-sky-400" />
+                    <span>OFFICIAL FLIGHT ARRIVAL REPORT</span>
+                  </h2>
+
+                  <button
+                    onClick={() => printSection('arrival')}
+                    className="px-3.5 py-1.5 rounded-xl bg-sky-600/80 hover:bg-sky-500 text-white font-sans text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors shadow"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>PRINT A4 TABLE</span>
+                  </button>
+                </div>
+
+                <div className="print-table-scroll flex-1 overflow-y-auto">
+                  <ArrivalReportTable
+                    data={formData}
+                    user={userInfo}
+                    mode={reportType}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

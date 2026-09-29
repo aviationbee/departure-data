@@ -78,6 +78,7 @@
   .print-page-wrapper,
   .print-dual-container,
   #right-report-printable,
+  #arrival-report-printable,
   .print-table-scroll {
     background: transparent !important;
     background-image: none !important;
@@ -96,8 +97,22 @@
     display: block !important;
   }
 
+  body[data-print-target="departure"] #arrival-report-printable {
+    display: none !important;
+  }
+
+  body[data-print-target="arrival"] #right-report-printable {
+    display: none !important;
+  }
+
+  body:not([data-print-target="departure"]):not([data-print-target="arrival"]) #right-report-printable {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
   /* Official A4 Table container */
-  #printable-right-table {
+  #printable-right-table,
+  #printable-arrival-table {
     width: 100% !important;
     max-width: 100% !important;
     min-height: 0 !important;
@@ -111,7 +126,8 @@
     break-inside: avoid !important;
   }
 
-  #printable-right-table table {
+  #printable-right-table table,
+  #printable-arrival-table table {
     width: 100% !important;
     border-collapse: collapse !important;
     border: 1.5pt solid #000000 !important;
@@ -119,13 +135,15 @@
     break-inside: avoid !important;
   }
 
-  #printable-right-table tr {
+  #printable-right-table tr,
+  #printable-arrival-table tr {
     border: 1pt solid #000000 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  #printable-right-table td {
+  #printable-right-table td,
+  #printable-arrival-table td {
     padding: 4.5px 8px !important;
     font-size: 9.5pt !important;
     line-height: 1.25 !important;
