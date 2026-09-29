@@ -30,6 +30,7 @@ export const db = initializeFirestore(
 
 // Active subscriber registries for instant activity-based sync without page reload
 const flightReportSubscribers = new Set<(reports: StoredFlightReport[]) => void>();
+const massReportSubscribers = new Set<(reports: StoredMassReport[]) => void>();
 const activityLogSubscribers = new Set<(logs: ActivityLogEntry[]) => void>();
 const systemNoticeSubscribers = new Set<(notice: SystemNoticeDoc | null) => void>();
 
@@ -51,7 +52,7 @@ export async function syncRealtimeDataOnActivity(force = false): Promise<void> {
       systemNoticeSubscribers.forEach((cb) => cb(noticeData));
     }
 
-    // 2. Sync Flight Reports if Admin Dashboard is active
+    // 2. Sync Flight Reports if Admin Dashboard or Saved Flight Data is active
     if (flightReportSubscribers.size > 0) {
       const qReports = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(qReports);
@@ -63,6 +64,20 @@ export async function syncRealtimeDataOnActivity(force = false): Promise<void> {
         }
       });
       flightReportSubscribers.forEach((cb) => cb(list));
+    }
+
+    // 2.5 Sync MASS Reports if MASS History is active
+    if (massReportSubscribers.size > 0) {
+      const qMass = query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(qMass);
+      const list: StoredMassReport[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as Omit<StoredMassReport, 'id'>;
+        if (!data.expiresAt || data.expiresAt > now) {
+          list.push({ id: docSnap.id, ...data });
+        }
+      });
+      massReportSubscribers.forEach((cb) => cb(list));
     }
 
     // 3. Sync Activity Logs if Super Admin Log Check is active
@@ -176,8 +191,69 @@ export interface StoredMassReport {
   flstText: string;
   preparedBy: string;
   usbaId: string;
+  designation?: string;
   createdAt: string;
   expiresAt: number;
+}
+
+export function reconstructFormDataFromStoredReport(r: StoredFlightReport): FlightFormData {
+  if (r.rawFormData) {
+    return r.rawFormData;
+  }
+  return {
+    date: r.date || new Date().toISOString().split('T')[0],
+    flightNoSuffix: (r.flightNo || '').replace(/^BS-/i, ''),
+    route: r.route || '',
+    acRegSuffix: (r.acReg || '').replace(/^S2-/i, ''),
+    acType: r.acType || '',
+    captain: r.captain || '',
+    configure: r.configure || '',
+    sta: r.sta || '',
+    chocksOn: r.chocksOn || '',
+    doorOpen: r.doorOpen || '',
+    arrivalStatus: r.arrivalStatus || 'FLIGHT ON TIME ARRIVED',
+    std: r.std || '',
+    doorClosed: r.doorClosed || '',
+    chocksOff: r.chocksOff || '',
+    airborne: r.airborne || '',
+    departureStatus: r.departureStatus || 'FLIGHT ONTIME',
+    delayReason: r.delayReason || '',
+    flightLoad: r.flightLoad || '',
+    fuelUplift: r.fuelUplift || '',
+    paxMale: r.paxMale || '',
+    paxFemale: r.paxFemale || '',
+    paxChild: r.paxChild || '',
+    paxInfant: r.paxInfant || '',
+    paxTotal: r.paxTotal || '',
+    baggageWeight: r.baggageWeight || '',
+    baggagePcs: r.baggagePcs || '',
+    cargoWeight: r.cargoWeight || '',
+    cargoPcs: r.cargoPcs || '',
+    mail: r.mail || '',
+    counterNoshow: r.counterNoshow || '',
+    noshowPnr: r.noshowPnr || '',
+    gateNoShow: r.gateNoShow || '',
+    selfOffload: r.selfOffload || '',
+    vip: r.vip || '',
+    cip: r.cip || '',
+    maas: r.maas || '',
+    umPax: r.umPax || '',
+    umPaxSeat: r.umPaxSeat || '',
+    fireArms: r.fireArms || '',
+    fireArmsSeat: r.fireArmsSeat || '',
+    wchrFig: r.wchrFig || '',
+    wchrSeat: r.wchrSeat || '',
+    wchcFig: r.wchcFig || '',
+    wchcSeat: r.wchcSeat || '',
+    checkInStaff: r.checkInStaff || '',
+    checkInStuff: r.checkInStaff || '',
+    rampOfficer: r.rampOfficer || '',
+    loadingStuff: r.rampOfficer || '',
+    loadController: r.loadController || '',
+    paxHandling: r.paxHandling || '',
+    remarks: r.remarks || '',
+    flstRawMessage: '',
+  };
 }
 
 // Save Flight Report to Firestore (preserved for 90 days)
@@ -283,6 +359,7 @@ export async function saveMassReportToCloud(
     destInput: string;
     categoryInput: string;
     flstText: string;
+    designation?: string;
   },
   userInfo: UserInfo
 ): Promise<void> {
@@ -300,11 +377,13 @@ export async function saveMassReportToCloud(
       destInput: item.destInput,
       categoryInput: item.categoryInput,
       flstText: item.flstText,
-      preparedBy: userInfo.userName || 'OFFICER',
-      usbaId: userInfo.usbaId || '',
+      preparedBy: (userInfo.userName || 'OFFICER').toUpperCase(),
+      usbaId: (userInfo.usbaId || '').toUpperCase(),
+      designation: (item.designation || 'EXECUTIVE').toUpperCase(),
       createdAt,
       expiresAt,
     });
+    await syncRealtimeDataOnActivity(true);
   } catch (err) {
     console.warn('Firestore saveMassReportToCloud warning:', err);
   }
@@ -398,6 +477,35 @@ export function subscribeToFlightReports(
   );
   return () => {
     flightReportSubscribers.delete(callback);
+    unsub();
+  };
+}
+
+// Subscribe to MASS Reports in real-time (filtered to 90 days)
+export function subscribeToMassReports(
+  callback: (reports: StoredMassReport[]) => void
+) {
+  massReportSubscribers.add(callback);
+  const q = query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'));
+  const unsub = onSnapshot(
+    q,
+    (snapshot) => {
+      const now = Date.now();
+      const list: StoredMassReport[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Omit<StoredMassReport, 'id'>;
+        if (!data.expiresAt || data.expiresAt > now) {
+          list.push({ id: docSnap.id, ...data });
+        }
+      });
+      callback(list);
+    },
+    (err) => {
+      console.warn('Warning subscribing to mass_reports:', err);
+    }
+  );
+  return () => {
+    massReportSubscribers.delete(callback);
     unsub();
   };
 }

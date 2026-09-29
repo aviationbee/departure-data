@@ -31,7 +31,10 @@ import {
   saveFlightReportToCloud,
   logUserActivity,
   subscribeToSystemNotice,
+  subscribeToFlightReports,
   syncRealtimeDataOnActivity,
+  reconstructFormDataFromStoredReport,
+  StoredFlightReport,
   SystemNoticeDoc,
 } from './firebase';
 import {
@@ -54,6 +57,8 @@ import {
   Image as ImageIcon,
   Lock,
   Megaphone,
+  FolderOpen,
+  Eye,
 } from 'lucide-react';
 
 const STATION_OPTIONS = [
@@ -231,6 +236,11 @@ export default function App() {
   void missingMandatoryBox;
   const [pageHistory, setPageHistory] = useState<PageMode[]>([]);
   const [liveNotice, setLiveNotice] = useState<SystemNoticeDoc | null>(null);
+  const [cloudFlightReports, setCloudFlightReports] = useState<StoredFlightReport[]>([]);
+  const [viewedSavedReport, setViewedSavedReport] = useState<{
+    formData: FlightFormData;
+    user: UserInfo;
+  } | null>(null);
   const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
   });
@@ -288,6 +298,7 @@ export default function App() {
   const navigateToPage = (nextPage: PageMode) => {
     if (nextPage === 'identification' || nextPage === 'welcome') {
       setPageHistory([]);
+      setViewedSavedReport(null);
     } else if (nextPage !== currentPage) {
       setPageHistory((prev) => [...prev, currentPage]);
     }
@@ -295,6 +306,11 @@ export default function App() {
   };
 
   const handlePreviousPage = () => {
+    if (currentPage === 'dual-report' && viewedSavedReport) {
+      setViewedSavedReport(null);
+      setCurrentPage('saved-flights');
+      return;
+    }
     if (pageHistory.length > 0) {
       const prev = pageHistory[pageHistory.length - 1];
       setPageHistory((h) => h.slice(0, -1));
@@ -303,6 +319,8 @@ export default function App() {
     }
     if (currentPage === 'dual-report') {
       setCurrentPage(lastDataPage);
+    } else if (currentPage === 'saved-flights') {
+      setCurrentPage('welcome');
     } else if (currentPage === 'mass-report' || currentPage === 'mass-history') {
       setCurrentPage('mass-dashboard');
     } else if (currentPage === 'mass-dashboard') {
@@ -335,10 +353,13 @@ export default function App() {
     showToast('LOGGED OUT SUCCESSFULLY.');
   };
 
-  // Real-time subscription to Super Admin Notice + Activity-Triggered Instant Cloud Sync (no page refresh required)
+  // Real-time subscription to Super Admin Notice + Flight Reports + Activity-Triggered Instant Cloud Sync (no page refresh required)
   useEffect(() => {
     const unsub = subscribeToSystemNotice((notice) => {
       setLiveNotice(notice);
+    });
+    const unsubFlights = subscribeToFlightReports((reports) => {
+      setCloudFlightReports(reports);
     });
 
     // Trigger immediate sync on mount
@@ -361,6 +382,7 @@ export default function App() {
 
     return () => {
       unsub();
+      unsubFlights();
       activityEvents.forEach((ev) => window.removeEventListener(ev, handleUserActivitySync));
       window.clearInterval(syncTimer);
     };
@@ -538,6 +560,7 @@ export default function App() {
   };
 
   const goToDataPage = (page: PageMode, type: 'intl' | 'dom') => {
+    setViewedSavedReport(null);
     setReportType(type);
     setLastDataPage(page);
     navigateToPage(page);
@@ -606,6 +629,7 @@ export default function App() {
       userInfo
     );
 
+    setViewedSavedReport(null);
     setReportType(type);
     navigateToPage('dual-report');
   };
@@ -770,8 +794,35 @@ export default function App() {
     showToast('Sample flight data loaded!');
   };
 
-  const departureMessage = generateFlightDepartureMessage(formData, userInfo, reportType);
-  const flstWhatsappMessage = parseFlstMessage(formData.flstRawMessage, formData);
+  const activeReportFormData = viewedSavedReport ? viewedSavedReport.formData : formData;
+  const activeReportUser = viewedSavedReport ? viewedSavedReport.user : userInfo;
+  const isReadOnlySavedReport = Boolean(viewedSavedReport);
+  const activeIsOutstation =
+    (activeReportUser.stationName || userInfo.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
+
+  const todayIsoDate = new Date().toISOString().split('T')[0];
+  const todayLocalDate = new Date().toLocaleDateString('en-CA');
+  const currentStationUpper = (userInfo.stationName || 'DAC').trim().toUpperCase();
+  const todayStationSavedFlights = cloudFlightReports.filter((r) => {
+    const rStation = (r.station || 'DAC').trim().toUpperCase();
+    if (rStation !== currentStationUpper) return false;
+    const isTodayFlightDate = r.date === todayIsoDate || r.date === todayLocalDate;
+    const isCreatedToday =
+      r.createdAt &&
+      (r.createdAt.startsWith(todayIsoDate) ||
+        new Date(r.createdAt).toLocaleDateString('en-CA') === todayLocalDate);
+    return Boolean(isTodayFlightDate || isCreatedToday);
+  });
+
+  const departureMessage = generateFlightDepartureMessage(
+    activeReportFormData,
+    activeReportUser,
+    reportType
+  );
+  const flstWhatsappMessage = parseFlstMessage(
+    activeReportFormData.flstRawMessage,
+    activeReportFormData
+  );
 
   return (
     <div className="aviation-modern-bg min-h-screen w-full flex flex-col font-serif select-text text-white relative">
@@ -916,6 +967,14 @@ export default function App() {
               </button>
 
               <button
+                onClick={() => navigateToPage('saved-flights')}
+                className="py-4 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-emerald-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-emerald-400/30 flex items-center justify-center gap-3 cursor-pointer uppercase"
+              >
+                <FolderOpen className="w-5 h-5 text-emerald-200" />
+                <span>SAVED FLIGHT DATA</span>
+              </button>
+
+              <button
                 onClick={() => navigateToPage('mass-login')}
                 className="py-4 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-purple-400/30 flex items-center justify-center gap-3 cursor-pointer uppercase"
               >
@@ -938,6 +997,145 @@ export default function App() {
                 <LogOut className="w-3.5 h-3.5" />
                 <span>LOG OUT / PREVIOUS</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= PAGE 2.5: SAVED FLIGHT DATA (TODAY'S STATION REPORTS - VIEW & PRINT ONLY) ================= */}
+      {currentPage === 'saved-flights' && (
+        <div className="flex-1 p-4 md:p-8 min-h-screen flex flex-col items-center">
+          <div className="max-w-6xl w-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 shadow-2xl rounded-2xl p-5 md:p-8 my-auto text-slate-200">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-5 mb-6 border-b border-slate-800 gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-black tracking-wider uppercase mb-2">
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>STATION: {currentStationUpper} &bull; TODAY&apos;S GENERATED FLIGHT REPORTS</span>
+                </div>
+                <h1 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
+                  <Plane className="w-6 h-6 text-amber-400" />
+                  <span>SAVED FLIGHT DATA ({todayStationSavedFlights.length})</span>
+                </h1>
+                <p className="text-xs text-slate-400 font-sans mt-0.5 uppercase tracking-wider">
+                  REAL-TIME TODAY&apos;S FLIGHT LIST FOR STATION {currentStationUpper} &mdash; CLICK &ldquo;OPEN&rdquo; TO VIEW &amp; PRINT REPORTS (READ-ONLY)
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePreviousPage}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>PREVIOUS</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateToPage('welcome')}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow uppercase"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>DASHBOARD</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow uppercase"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>LOG OUT</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-700 shadow-inner">
+              <table className="w-full border-collapse text-xs md:text-sm font-sans uppercase">
+                <thead>
+                  <tr className="bg-slate-800 text-amber-300 border-b border-slate-700">
+                    <th className="p-3.5 text-center font-bold whitespace-nowrap">SL</th>
+                    <th className="p-3.5 text-left font-bold whitespace-nowrap">DATE</th>
+                    <th className="p-3.5 text-left font-bold whitespace-nowrap">FLIGHT NO</th>
+                    <th className="p-3.5 text-left font-bold whitespace-nowrap">ROUTE</th>
+                    <th className="p-3.5 text-left font-bold whitespace-nowrap">A/C REG</th>
+                    <th className="p-3.5 text-left font-bold whitespace-nowrap">CAPTAIN</th>
+                    <th className="p-3.5 text-center font-bold whitespace-nowrap">STD / ATD / A/B</th>
+                    <th className="p-3.5 text-center font-bold whitespace-nowrap">TOTAL PAX</th>
+                    <th className="p-3.5 text-left font-bold whitespace-nowrap">PREPARED BY</th>
+                    <th className="p-3.5 text-center font-bold whitespace-nowrap">OPTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todayStationSavedFlights.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="p-10 text-center text-slate-400 font-bold">
+                        NO FLIGHT REPORTS GENERATED TODAY FOR STATION {currentStationUpper}.
+                      </td>
+                    </tr>
+                  ) : (
+                    todayStationSavedFlights.map((r, index) => (
+                      <tr
+                        key={r.id}
+                        className="border-b border-slate-800 hover:bg-slate-800/60 transition-colors"
+                      >
+                        <td className="p-3.5 text-center font-mono font-bold text-slate-400">
+                          {String(index + 1).padStart(2, '0')}
+                        </td>
+                        <td className="p-3.5 font-mono font-bold text-slate-200 whitespace-nowrap">
+                          {r.date}
+                        </td>
+                        <td className="p-3.5 font-black text-sky-300 whitespace-nowrap">
+                          {r.flightNo}
+                        </td>
+                        <td className="p-3.5 font-bold text-white whitespace-nowrap">{r.route}</td>
+                        <td className="p-3.5 font-bold text-slate-200 whitespace-nowrap">
+                          {r.acReg} <span className="text-[11px] text-slate-400">({r.acType})</span>
+                        </td>
+                        <td className="p-3.5 font-bold text-white whitespace-nowrap">
+                          {r.captain}
+                        </td>
+                        <td className="p-3.5 text-center font-mono text-slate-200 whitespace-nowrap">
+                          {r.std || '--'} / {r.chocksOff || '--'} / {r.airborne || '--'}
+                        </td>
+                        <td className="p-3.5 text-center font-bold text-emerald-300 whitespace-nowrap">
+                          {r.paxTotal || '0'}+{r.paxInfant || '0'}
+                        </td>
+                        <td className="p-3.5 font-bold text-indigo-300 whitespace-nowrap">
+                          {r.preparedBy}
+                          {r.usbaId && (
+                            <span className="block text-[10px] text-slate-400">
+                              USBA-{r.usbaId}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const loadedData = reconstructFormDataFromStoredReport(r);
+                              setViewedSavedReport({
+                                formData: loadedData,
+                                user: {
+                                  userName: r.preparedBy || userInfo.userName,
+                                  usbaId: r.usbaId || userInfo.usbaId,
+                                  stationName: r.station || userInfo.stationName,
+                                },
+                              });
+                              navigateToPage('dual-report');
+                            }}
+                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>OPEN</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -2097,12 +2295,24 @@ export default function App() {
           {/* Header Bar */}
           <div className="no-print max-w-7xl mx-auto w-full flex flex-col md:flex-row justify-between items-center mb-4 bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-700/70 shadow-xl gap-3">
             <div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-wider text-white uppercase flex items-center gap-2">
-                <Plane className="w-5 h-5 text-amber-400" />
-                <span>US-BANGLA AIRLINES &mdash; FLIGHT REPORTS</span>
-              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-bold tracking-wider text-white uppercase flex items-center gap-2">
+                  <Plane className="w-5 h-5 text-amber-400" />
+                  <span>US-BANGLA AIRLINES &mdash; FLIGHT REPORTS</span>
+                </h1>
+                {isReadOnlySavedReport && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[11px] font-sans font-black tracking-wider uppercase">
+                    SAVED REPORT (VIEW &amp; PRINT ONLY)
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400 font-sans mt-0.5">
-                FLIGHT: <span className="font-bold text-amber-300">BS-{formData.flightNoSuffix || 'XXX'}</span> ({formData.route || 'N/A'}) &bull; PREPARED BY: {userInfo.userName} &bull; STATION: {userInfo.stationName}
+                FLIGHT:{' '}
+                <span className="font-bold text-amber-300">
+                  BS-{activeReportFormData.flightNoSuffix || 'XXX'}
+                </span>{' '}
+                ({activeReportFormData.route || 'N/A'}) &bull; PREPARED BY:{' '}
+                {activeReportUser.userName} &bull; STATION: {activeReportUser.stationName}
               </p>
             </div>
 
@@ -2112,7 +2322,7 @@ export default function App() {
                 className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm border border-slate-700 uppercase"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>PREVIOUS</span>
+                <span>{isReadOnlySavedReport ? 'BACK TO SAVED LIST' : 'PREVIOUS'}</span>
               </button>
 
               <button
@@ -2139,13 +2349,15 @@ export default function App() {
                 <span>PRINT REPORT (A4)</span>
               </button>
 
-              <button
-                onClick={() => setShowNewReportModal(true)}
-                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>NEW REPORT</span>
-              </button>
+              {!isReadOnlySavedReport && (
+                <button
+                  onClick={() => setShowNewReportModal(true)}
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm uppercase"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>NEW REPORT</span>
+                </button>
+              )}
 
               <button
                 onClick={handleLogout}
@@ -2164,7 +2376,7 @@ export default function App() {
               id="left-report-printable"
               className="no-print bg-slate-900/80 backdrop-blur-xl border border-slate-700/70 rounded-2xl p-5 shadow-2xl flex flex-col"
             >
-              <DeparturePhotoCard data={formData} user={userInfo} />
+              <DeparturePhotoCard data={activeReportFormData} user={activeReportUser} />
             </div>
 
             {/* Panel 1.5: VIP/MAAS/WCHR MESSAGE (WHATSAPP MESSAGE) */}
@@ -2222,15 +2434,15 @@ export default function App() {
 
               <div className="print-table-scroll flex-1 overflow-y-auto">
                 <DepartureReportTable
-                  data={formData}
-                  user={userInfo}
+                  data={activeReportFormData}
+                  user={activeReportUser}
                   mode={reportType}
                 />
               </div>
             </div>
 
             {/* Panel 3: Official Arrival Report Table (Outstation Only - Printable A4 - Generated right after Official Flight Departure Report) */}
-            {isOutstation && (
+            {activeIsOutstation && (
               <div
                 id="arrival-report-printable"
                 className="bg-slate-900/80 backdrop-blur-xl border border-sky-500/60 rounded-2xl p-5 shadow-2xl flex flex-col overflow-hidden"
@@ -2252,8 +2464,8 @@ export default function App() {
 
                 <div className="print-table-scroll flex-1 overflow-y-auto">
                   <ArrivalReportTable
-                    data={formData}
-                    user={userInfo}
+                    data={activeReportFormData}
+                    user={activeReportUser}
                     mode={reportType}
                   />
                 </div>

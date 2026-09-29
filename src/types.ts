@@ -99,6 +99,7 @@ export type PageMode =
   | 'data-intl'
   | 'data-dom'
   | 'dual-report'
+  | 'saved-flights'
   | 'mass-login'
   | 'mass-dashboard'
   | 'mass-history'

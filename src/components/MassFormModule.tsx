@@ -3,6 +3,8 @@ import { UserInfo, PageMode } from '../types';
 import {
   saveMassReportToCloud,
   deleteMassReportFromCloud,
+  subscribeToMassReports,
+  StoredMassReport,
   logUserActivity,
 } from '../firebase';
 import {
@@ -21,11 +23,16 @@ import {
 
 interface MassHistoryItem {
   id: number;
+  docId?: string;
+  station?: string;
   dateInput: string;
   flightNoInput: string;
   destInput: string;
   categoryInput: string;
   flstText: string;
+  preparedBy?: string;
+  usbaId?: string;
+  designation?: string;
 }
 
 interface MassPassenger {
@@ -239,13 +246,7 @@ export const MassFormModule: React.FC<Props> = ({
     return localStorage.getItem('massApp_flst-data') || '';
   });
 
-  const [historyList, setHistoryList] = useState<MassHistoryItem[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('massApp_history') || '[]');
-    } catch {
-      return [];
-    }
-  });
+  const [cloudMassReports, setCloudMassReports] = useState<StoredMassReport[]>([]);
 
   const [activeReportData, setActiveReportData] = useState<{
     dateInput: string;
@@ -253,7 +254,39 @@ export const MassFormModule: React.FC<Props> = ({
     destInput: string;
     categoryInput: string;
     flstText: string;
+    preparedBy?: string;
+    designation?: string;
   } | null>(null);
+
+  // Real-time subscription to MASS Reports for the logged-in station
+  useEffect(() => {
+    const unsub = subscribeToMassReports((reports) => {
+      setCloudMassReports(reports);
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  const currentStationCode = (userInfo.stationName || 'DAC').trim().toUpperCase();
+  const stationHistoryList: MassHistoryItem[] = cloudMassReports
+    .filter((r) => (r.station || 'DAC').trim().toUpperCase() === currentStationCode)
+    .map((r, idx) => {
+      const idNum = Number(r.id.split('_')[1]) || Date.parse(r.createdAt) || idx + 1;
+      return {
+        id: idNum,
+        docId: r.id,
+        station: r.station,
+        dateInput: r.dateInput,
+        flightNoInput: r.flightNoInput,
+        destInput: r.destInput,
+        categoryInput: r.categoryInput,
+        flstText: r.flstText,
+        preparedBy: r.preparedBy,
+        usbaId: r.usbaId,
+        designation: r.designation,
+      };
+    });
 
   // Sync draft inputs to localStorage
   useEffect(() => {
@@ -326,6 +359,8 @@ export const MassFormModule: React.FC<Props> = ({
         destInput: item.destInput,
         categoryInput: item.categoryInput,
         flstText: item.flstText,
+        preparedBy: item.preparedBy,
+        designation: item.designation,
       });
       setCurrentPage('mass-report');
       return;
@@ -359,13 +394,12 @@ export const MassFormModule: React.FC<Props> = ({
       destInput: cleanDest,
       categoryInput: cleanCategory,
       flstText: flstData,
+      preparedBy: (userInfo.userName || 'OFFICER').toUpperCase(),
+      usbaId: (userInfo.usbaId || '').toUpperCase(),
+      designation: (designation || 'EXECUTIVE').toUpperCase(),
     };
 
-    const updatedHistory = [...historyList, newEntry];
-    setHistoryList(updatedHistory);
-    localStorage.setItem('massApp_history', JSON.stringify(updatedHistory));
-
-    // Save MASS report to Cloud Firestore for 90 days & log activity
+    // Save MASS report to Cloud Firestore for 90 days (shared in real-time across the station) & log activity
     saveMassReportToCloud(newEntry, userInfo);
     logUserActivity(
       'MASS REPORT GENERATED',
@@ -379,19 +413,16 @@ export const MassFormModule: React.FC<Props> = ({
       destInput: cleanDest,
       categoryInput: cleanCategory,
       flstText: flstData,
+      preparedBy: (userInfo.userName || 'OFFICER').toUpperCase(),
+      designation: (designation || 'EXECUTIVE').toUpperCase(),
     });
     setCurrentPage('mass-report');
   };
 
-  const handleDeleteHistoryItem = (id: number) => {
-    const target = historyList.find((h) => h.id === id);
-    const updated = historyList.filter((h) => h.id !== id);
-    setHistoryList(updated);
-    localStorage.setItem('massApp_history', JSON.stringify(updated));
-    if (target) {
-      const st = (userInfo.stationName || 'DAC').trim().toUpperCase();
-      deleteMassReportFromCloud(`${st}_${target.id}`, target.flightNoInput, target.dateInput, userInfo);
-    }
+  const handleDeleteHistoryItem = (item: MassHistoryItem) => {
+    const st = (userInfo.stationName || 'DAC').trim().toUpperCase();
+    const docIdToUse = item.docId || `${st}_${item.id}`;
+    deleteMassReportFromCloud(docIdToUse, item.flightNoInput, item.dateInput, userInfo);
     showToast('REPORT DELETED');
   };
 
@@ -666,16 +697,20 @@ export const MassFormModule: React.FC<Props> = ({
     );
   }
 
-  // ================= 3. MASS HISTORY SCREEN =================
+  // ================= 3. MASS HISTORY SCREEN (REAL-TIME STATION HISTORY) =================
   if (currentPage === 'mass-history') {
-    const reversedHistory = [...historyList].reverse();
     return (
       <div className="flex-1 flex flex-col justify-center items-center p-4 md:p-8 min-h-screen relative">
-        <div className="max-w-3xl w-full bg-slate-900/90 backdrop-blur-xl p-6 md:p-8 rounded-2xl border border-slate-700/70 border-t-4 border-t-sky-500 border-b-4 border-b-rose-500 shadow-2xl text-slate-200">
+        <div className="max-w-4xl w-full bg-slate-900/90 backdrop-blur-xl p-6 md:p-8 rounded-2xl border border-slate-700/70 border-t-4 border-t-sky-500 border-b-4 border-b-rose-500 shadow-2xl text-slate-200">
           <div className="flex flex-col sm:flex-row justify-between items-center pb-4 mb-6 border-b border-slate-800 gap-3">
-            <h2 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase">
-              SAVED REPORTS HISTORY
-            </h2>
+            <div>
+              <h2 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase">
+                SAVED REPORTS HISTORY &mdash; STATION: <span className="text-amber-400">{currentStationCode}</span>
+              </h2>
+              <p className="text-[11px] font-sans text-slate-400 uppercase tracking-wider mt-0.5">
+                REAL-TIME SHARED STATION HISTORY ({stationHistoryList.length} REPORTS)
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -711,30 +746,39 @@ export const MassFormModule: React.FC<Props> = ({
                   <th className="p-3 text-center font-bold">DATE</th>
                   <th className="p-3 text-center font-bold">FLIGHT NO</th>
                   <th className="p-3 text-center font-bold">CATEGORY</th>
+                  <th className="p-3 text-center font-bold">SAVED BY</th>
                   <th className="p-3 text-center font-bold">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
-                {reversedHistory.length === 0 ? (
+                {stationHistoryList.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-6 text-center text-slate-400 font-bold">
-                      NO SAVED REPORTS FOUND.
+                    <td colSpan={5} className="p-6 text-center text-slate-400 font-bold">
+                      NO SAVED REPORTS FOUND FOR STATION {currentStationCode}.
                     </td>
                   </tr>
                 ) : (
-                  reversedHistory.map((item) => (
+                  stationHistoryList.map((item) => (
                     <tr
-                      key={item.id}
+                      key={item.docId || item.id}
                       className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors"
                     >
                       <td className="p-3 text-center font-bold text-white">
                         {formatMassDate(item.dateInput)}
                       </td>
                       <td className="p-3 text-center font-bold text-sky-300">
-                        BS-{item.flightNoInput}
+                        BS-{item.flightNoInput} ({item.destInput})
                       </td>
                       <td className="p-3 text-center font-bold text-amber-300">
                         {item.categoryInput || 'MAAS'}
+                      </td>
+                      <td className="p-3 text-center font-bold text-indigo-300">
+                        {item.preparedBy || 'OFFICER'}
+                        {item.usbaId && (
+                          <span className="block text-[10px] text-slate-400 font-sans">
+                            USBA-{item.usbaId}
+                          </span>
+                        )}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-2">
@@ -748,7 +792,7 @@ export const MassFormModule: React.FC<Props> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDeleteHistoryItem(item.id)}
+                            onClick={() => handleDeleteHistoryItem(item)}
                             className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition-all"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -790,8 +834,8 @@ export const MassFormModule: React.FC<Props> = ({
     const passengers = parseMassFLST(dataToUse.flstText, dataToUse.categoryInput);
     const totalPages = Math.max(1, Math.ceil(passengers.length / 8));
     const stationCode = (userInfo.stationName || 'DAC').toUpperCase();
-    const officerName = (userInfo.userName || '').toUpperCase();
-    const officerDesig = (designation || 'EXECUTIVE').toUpperCase();
+    const officerName = (dataToUse.preparedBy || userInfo.userName || '').toUpperCase();
+    const officerDesig = (dataToUse.designation || designation || 'EXECUTIVE').toUpperCase();
 
     return (
       <div className="mass-report-wrapper flex-1 p-4 md:p-8 min-h-screen flex flex-col items-center">
