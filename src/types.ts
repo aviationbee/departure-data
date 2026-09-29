@@ -106,5 +106,7 @@ export type PageMode =
   | 'mass-report'
   | 'admin-login'
   | 'admin-dashboard'
+  | 'admin-saved-flight'
+  | 'admin-saved-maas'
   | 'admin-logs';
 

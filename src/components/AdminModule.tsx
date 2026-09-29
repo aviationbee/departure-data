@@ -2,16 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { UserInfo, PageMode, FlightFormData } from '../types';
 import {
   StoredFlightReport,
+  StoredMassReport,
   ActivityLogEntry,
   SystemNoticeDoc,
   STORAGE_START_DATE,
   subscribeToFlightReports,
+  subscribeToMassReports,
   subscribeToActivityLogs,
   subscribeToSystemNotice,
   circulateAdminNotice,
   deleteFlightReportFromCloud,
+  deleteMassReportFromCloud,
+  reconstructFormDataFromStoredReport,
   logUserActivity,
 } from '../firebase';
+import { formatMassDate, parseMassFLST } from './MassFormModule';
 import {
   ShieldCheck,
   Lock,
@@ -29,6 +34,9 @@ import {
   XCircle,
   Search,
   Building2,
+  FolderOpen,
+  FileText,
+  Printer,
 } from 'lucide-react';
 
 interface Props {
@@ -39,7 +47,7 @@ interface Props {
   onLogout: () => void;
   userInfo: UserInfo;
   showToast: (msg: string) => void;
-  onLoadFlightReport?: (formData: FlightFormData) => void;
+  onLoadFlightReport?: (formData: FlightFormData, reportUser?: UserInfo) => void;
 }
 
 const STATION_ADMIN_PASSWORDS: Record<string, string> = {
@@ -82,15 +90,25 @@ export const AdminModule: React.FC<Props> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const [flightReports, setFlightReports] = useState<StoredFlightReport[]>([]);
+  const [massReports, setMassReports] = useState<StoredMassReport[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
   const [currentNotice, setCurrentNotice] = useState<SystemNoticeDoc | null>(null);
   const [noticeInput, setNoticeInput] = useState<string>('');
   const [logStationFilter, setLogStationFilter] = useState<string>('ALL');
+  const [savedFlightStationFilter, setSavedFlightStationFilter] = useState<string>('ALL');
+  const [savedFlightSearch, setSavedFlightSearch] = useState<string>('');
+  const [savedFlightTodayOnly, setSavedFlightTodayOnly] = useState<boolean>(false);
+  const [savedMassStationFilter, setSavedMassStationFilter] = useState<string>('ALL');
+  const [savedMassSearch, setSavedMassSearch] = useState<string>('');
+  const [activeMassReportPreview, setActiveMassReportPreview] = useState<StoredMassReport | null>(null);
 
   // Real-time Firestore subscriptions
   useEffect(() => {
     const unsubReports = subscribeToFlightReports((reports) => {
       setFlightReports(reports);
+    });
+    const unsubMass = subscribeToMassReports((reports) => {
+      setMassReports(reports);
     });
     const unsubNotice = subscribeToSystemNotice((notice) => {
       setCurrentNotice(notice);
@@ -100,6 +118,7 @@ export const AdminModule: React.FC<Props> = ({
     });
     return () => {
       unsubReports();
+      unsubMass();
       unsubNotice();
       unsubLogs();
     };
@@ -552,6 +571,25 @@ export const AdminModule: React.FC<Props> = ({
               </button>
               <button
                 type="button"
+                onClick={() => setCurrentPage('admin-saved-flight')}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>SAVED FLIGHT</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveMassReportPreview(null);
+                  setCurrentPage('admin-saved-maas');
+                }}
+                className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>SAVED MAAS FORM</span>
+              </button>
+              <button
+                type="button"
                 onClick={onLogout}
                 className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow uppercase"
               >
@@ -663,6 +701,723 @@ export const AdminModule: React.FC<Props> = ({
     );
   }
 
+  // ================= 2.5 SUPER ADMIN: SAVED FLIGHT PAGE (STATION-WISE READ, PRINT & DELETE) =================
+  if (currentPage === 'admin-saved-flight') {
+    const todayIso = new Date().toISOString().split('T')[0];
+    const todayLocal = new Date().toLocaleDateString('en-CA');
+
+    const filteredSavedFlights = flightReports.filter((r) => {
+      if (savedFlightStationFilter !== 'ALL' && (r.station || 'DAC').toUpperCase() !== savedFlightStationFilter) {
+        return false;
+      }
+      if (savedFlightTodayOnly) {
+        const isTodayDate = r.date === todayIso || r.date === todayLocal;
+        const isCreatedToday =
+          r.createdAt &&
+          (r.createdAt.startsWith(todayIso) ||
+            new Date(r.createdAt).toLocaleDateString('en-CA') === todayLocal);
+        if (!isTodayDate && !isCreatedToday) return false;
+      }
+      if (savedFlightSearch.trim() !== '') {
+        const q = savedFlightSearch.trim().toUpperCase();
+        const matchFlight = (r.flightNo || '').toUpperCase().includes(q);
+        const matchRoute = (r.route || '').toUpperCase().includes(q);
+        const matchReg = (r.acReg || '').toUpperCase().includes(q);
+        const matchCapt = (r.captain || '').toUpperCase().includes(q);
+        const matchUser = (r.preparedBy || '').toUpperCase().includes(q);
+        const matchDate = (r.date || '').toUpperCase().includes(q);
+        if (!matchFlight && !matchRoute && !matchReg && !matchCapt && !matchUser && !matchDate) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    return (
+      <div className="flex-1 p-4 md:p-8 min-h-screen flex flex-col items-center">
+        <div className="max-w-7xl w-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 shadow-2xl rounded-2xl p-5 md:p-8 text-slate-200">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center pb-5 mb-6 border-b border-slate-800 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-black tracking-wider uppercase mb-2">
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>SUPER ADMIN &bull; STATION-WISE SAVED FLIGHT REPORTS</span>
+              </div>
+              <h1 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
+                <Plane className="w-6 h-6 text-amber-400" />
+                <span>SAVED FLIGHT REPORTS ({filteredSavedFlights.length})</span>
+              </h1>
+              <p className="text-xs text-slate-400 font-sans mt-0.5 uppercase tracking-wider">
+                READ, PRINT AND DELETE GENERATED FLIGHT REPORTS STATION-WISE IN REAL TIME
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage('admin-dashboard')}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>PREVIOUS</span>
+              </button>
+              <button
+                type="button"
+                onClick={onDashboard}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow uppercase"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>DASHBOARD</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage('admin-saved-flight')}
+                className="px-3.5 py-2 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase ring-2 ring-emerald-300"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>SAVED FLIGHT</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveMassReportPreview(null);
+                  setCurrentPage('admin-saved-maas');
+                }}
+                className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>SAVED MAAS FORM</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage('admin-logs')}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>LOG CHECK</span>
+              </button>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow uppercase"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>LOG OUT</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Station Filter Bar & Search */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6 bg-slate-800/70 p-4 rounded-2xl border border-slate-700 font-sans">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-amber-300 uppercase flex items-center gap-1.5 mr-1">
+                <Building2 className="w-4 h-4" />
+                <span>STATION:</span>
+              </span>
+              {['ALL', ...Object.keys(STATION_ADMIN_PASSWORDS)].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setSavedFlightStationFilter(st)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase cursor-pointer transition-all border ${
+                    savedFlightStationFilter === st
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-lg'
+                      : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                  }`}
+                >
+                  {st === 'ALL' ? 'ALL STATIONS' : st}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSavedFlightTodayOnly(!savedFlightTodayOnly)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase cursor-pointer border transition-all ${
+                  savedFlightTodayOnly
+                    ? 'bg-amber-500 text-slate-950 border-amber-300'
+                    : 'bg-slate-900 text-slate-300 border-slate-600 hover:bg-slate-800'
+                }`}
+              >
+                {savedFlightTodayOnly ? 'SHOWING: TODAY ONLY' : 'SHOWING: ALL SAVED'}
+              </button>
+
+              <input
+                type="text"
+                placeholder="SEARCH FLIGHT / DATE / REG / USER..."
+                value={savedFlightSearch}
+                onChange={(e) => setSavedFlightSearch(e.target.value.toUpperCase())}
+                className="p-2 rounded-xl bg-slate-900 border border-slate-600 text-white text-xs font-bold uppercase focus:border-emerald-400 focus:outline-none min-w-[220px]"
+              />
+            </div>
+          </div>
+
+          {/* Saved Flights Table */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-700 shadow-inner">
+            <table className="w-full border-collapse text-xs font-sans uppercase">
+              <thead>
+                <tr className="bg-slate-800 text-amber-300 border-b border-slate-700">
+                  <th className="p-3 text-center font-bold whitespace-nowrap">SL</th>
+                  <th className="p-3 text-left font-bold whitespace-nowrap">DATE</th>
+                  <th className="p-3 text-center font-bold whitespace-nowrap">STATION</th>
+                  <th className="p-3 text-left font-bold whitespace-nowrap">FLIGHT NO</th>
+                  <th className="p-3 text-left font-bold whitespace-nowrap">ROUTE</th>
+                  <th className="p-3 text-left font-bold whitespace-nowrap">A/C REG</th>
+                  <th className="p-3 text-left font-bold whitespace-nowrap">CAPTAIN</th>
+                  <th className="p-3 text-center font-bold whitespace-nowrap">STD / ATD / A/B</th>
+                  <th className="p-3 text-center font-bold whitespace-nowrap">TOTAL PAX</th>
+                  <th className="p-3 text-left font-bold whitespace-nowrap">PREPARED BY</th>
+                  <th className="p-3 text-center font-bold whitespace-nowrap">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSavedFlights.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="p-10 text-center text-slate-400 font-bold">
+                      NO SAVED FLIGHT REPORTS FOUND FOR{' '}
+                      {savedFlightStationFilter === 'ALL'
+                        ? 'ANY STATION'
+                        : `STATION ${savedFlightStationFilter}`}
+                      .
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSavedFlights.map((r, idx) => (
+                    <tr
+                      key={r.id}
+                      className="border-b border-slate-800 hover:bg-slate-800/60 transition-colors"
+                    >
+                      <td className="p-3 text-center font-mono font-bold text-slate-400">
+                        {String(idx + 1).padStart(2, '0')}
+                      </td>
+                      <td className="p-3 font-mono font-bold text-slate-200 whitespace-nowrap">
+                        {r.date}
+                      </td>
+                      <td className="p-3 text-center whitespace-nowrap">
+                        <span className="px-2.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 font-black">
+                          {r.station}
+                        </span>
+                      </td>
+                      <td className="p-3 font-black text-sky-300 whitespace-nowrap">
+                        {r.flightNo}
+                      </td>
+                      <td className="p-3 font-bold text-white whitespace-nowrap">{r.route}</td>
+                      <td className="p-3 font-bold text-slate-300 whitespace-nowrap">
+                        {r.acReg} <span className="text-[10px] text-slate-400">({r.acType})</span>
+                      </td>
+                      <td className="p-3 font-bold text-white whitespace-nowrap">{r.captain}</td>
+                      <td className="p-3 text-center font-mono text-slate-200 whitespace-nowrap">
+                        {r.std || '--'} / {r.chocksOff || '--'} / {r.airborne || '--'}
+                      </td>
+                      <td className="p-3 text-center font-bold text-emerald-300 whitespace-nowrap">
+                        {r.paxTotal || '0'}+{r.paxInfant || '0'}
+                      </td>
+                      <td className="p-3 font-bold text-indigo-300 whitespace-nowrap">
+                        {r.preparedBy}
+                        {r.usbaId && (
+                          <span className="block text-[10px] text-slate-400">
+                            USBA-{r.usbaId}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
+                          {onLoadFlightReport && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const loaded = reconstructFormDataFromStoredReport(r);
+                                onLoadFlightReport(loaded, {
+                                  userName: r.preparedBy || userInfo.userName,
+                                  usbaId: r.usbaId || userInfo.usbaId,
+                                  stationName: r.station || userInfo.stationName,
+                                });
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] flex items-center gap-1 cursor-pointer shadow"
+                              title="Read & Print Flight Reports"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>OPEN / PRINT</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteFlightReportFromCloud(r, userInfo);
+                              showToast(`DELETED FLIGHT ${r.flightNo} (${r.station})`);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-[11px] flex items-center gap-1 cursor-pointer shadow"
+                            title="Delete Saved Flight Report"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>DELETE</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ================= 2.6 SUPER ADMIN: SAVED MAAS FORM PAGE (STATION-WISE READ, PRINT & DELETE) =================
+  if (currentPage === 'admin-saved-maas') {
+    if (activeMassReportPreview) {
+      const formattedDate = formatMassDate(activeMassReportPreview.dateInput);
+      const passengers = parseMassFLST(
+        activeMassReportPreview.flstText,
+        activeMassReportPreview.categoryInput
+      );
+      const totalPages = Math.max(1, Math.ceil(passengers.length / 8));
+      const stationCode = (activeMassReportPreview.station || 'DAC').toUpperCase();
+      const officerName = (activeMassReportPreview.preparedBy || 'OFFICER').toUpperCase();
+      const officerDesig = (activeMassReportPreview.designation || 'EXECUTIVE').toUpperCase();
+
+      return (
+        <div className="mass-report-wrapper flex-1 p-4 md:p-8 min-h-screen flex flex-col items-center">
+          <div className="no-print max-w-[850px] w-full flex flex-col sm:flex-row justify-between items-center mb-6 bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-700/70 shadow-xl gap-3">
+            <div className="flex items-center gap-2 text-white font-bold tracking-wider uppercase text-sm md:text-base">
+              <FileText className="w-5 h-5 text-amber-400" />
+              <span>
+                SAVED MAAS FORM ({stationCode}) &mdash; BS-{activeMassReportPreview.flightNoInput}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveMassReportPreview(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-all uppercase"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>BACK TO SAVED MAAS LIST</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg transition-all uppercase"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>PRINT / SAVE AS PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  deleteMassReportFromCloud(
+                    activeMassReportPreview.id,
+                    activeMassReportPreview.flightNoInput,
+                    activeMassReportPreview.dateInput,
+                    userInfo
+                  );
+                  showToast('MAAS REPORT DELETED');
+                  setActiveMassReportPreview(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg transition-all uppercase"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>DELETE</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="w-full flex flex-col items-center gap-8">
+            {Array.from({ length: totalPages }).map((_, pageIdx) => (
+              <div
+                key={pageIdx}
+                className="mass-report-page w-full max-w-[850px] bg-white text-black p-6 md:p-10 rounded-xl shadow-2xl uppercase"
+                style={{ fontFamily: "'Times New Roman', Times, serif" }}
+              >
+                <div className="flex justify-between items-center mb-7 border-b-2 border-black pb-4 gap-4">
+                  <div className="flex flex-col items-start justify-center whitespace-nowrap">
+                    <div
+                      className="font-black italic text-[26px] text-[#0b2e59] leading-none"
+                      style={{ fontFamily: 'Arial, sans-serif' }}
+                    >
+                      US-BANGLA
+                    </div>
+                    <div
+                      className="text-[11px] tracking-[5px] text-black mt-1 font-bold"
+                      style={{ fontFamily: 'Arial, sans-serif' }}
+                    >
+                      A I R L I N E S
+                    </div>
+                  </div>
+
+                  <div
+                    className="flex-1 text-center font-black text-base md:text-lg text-[#0b2e59] tracking-wider bg-[#f0f4f8] py-2.5 px-4 rounded-md border-l-[6px] border-[#0b2e59]"
+                    style={{ fontFamily: "'Segoe UI', Arial, sans-serif" }}
+                  >
+                    MEET AND ASSIST (MASS) HAND OVER LIST
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-base md:text-[18px] font-bold mb-5 text-black">
+                  <div>FLIGHT NO. BS- {activeMassReportPreview.flightNoInput}</div>
+                  <div>DATE: {formattedDate}</div>
+                  <div>STATION: {stationCode}</div>
+                </div>
+
+                <table className="w-full border-collapse mb-4 table-fixed border border-black text-black">
+                  <thead>
+                    <tr className="bg-slate-50/60">
+                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[30%]">
+                        NAME OF PASSENGER
+                      </th>
+                      <th className="border border-black px-1.5 py-2 text-center text-[13px] font-bold w-[10%]">
+                        SEAT NO.
+                      </th>
+                      <th className="border border-black px-1.5 py-2 text-center text-[13px] font-bold w-[15%]">
+                        DESTINATION
+                      </th>
+                      <th className="border border-black px-1.5 py-2 text-center text-[13px] font-bold w-[13%]">
+                        CATEGORY
+                      </th>
+                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[32%]">
+                        REMARKS
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 8 }).map((__, rowIdx) => {
+                      const paxIndex = pageIdx * 8 + rowIdx;
+                      const pax = passengers[paxIndex];
+                      return (
+                        <tr key={rowIdx} className="h-[36px]">
+                          <td className="border border-black px-2 py-1.5 text-left text-[13px] break-words">
+                            {pax ? pax.name : ''}
+                          </td>
+                          <td className="border border-black px-1.5 py-1.5 text-center text-[13px] font-semibold break-words">
+                            {pax ? pax.seat : ''}
+                          </td>
+                          <td className="border border-black px-1.5 py-1.5 text-center text-[13px] break-words">
+                            {pax ? activeMassReportPreview.destInput : ''}
+                          </td>
+                          <td className="border border-black px-1.5 py-1.5 text-center text-[13px] break-words">
+                            {pax ? activeMassReportPreview.categoryInput : ''}
+                          </td>
+                          <td className="border border-black px-2 py-1.5 text-left text-[13px] break-words">
+                            {pax ? pax.remarks : ''}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                <div className="text-center font-bold text-[15px] my-5 text-black">
+                  *PLEASE INDICATE: WEHR-WHEEL CHAIR UPTO RAMP, MEDA, UM/YP, ETC.
+                </div>
+
+                <div className="text-center font-bold text-[19px] mb-3 text-black">
+                  ACKNOWLEDGEMENT
+                </div>
+
+                <table className="w-full border-collapse table-fixed border border-black text-black">
+                  <thead>
+                    <tr className="bg-slate-50/60">
+                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[16%]"></th>
+                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[34%]">
+                        NAME / DESIGNATION
+                      </th>
+                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[15%]">
+                        STATION
+                      </th>
+                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[20%]">
+                        SIGNATURE
+                      </th>
+                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[15%]">
+                        DATE
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="h-[38px]">
+                      <td className="border border-black px-2 py-1 text-center font-bold text-[13px] leading-tight">
+                        UPLIFT
+                        <br />
+                        STATION
+                      </td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]">
+                        {officerName} //{officerDesig}
+                      </td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]">
+                        {stationCode}
+                      </td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]">
+                        {formattedDate}
+                      </td>
+                    </tr>
+                    <tr className="h-[38px]">
+                      <td className="border border-black px-2 py-1 text-center font-bold text-[13px] leading-tight">
+                        CABIN
+                        <br />
+                        CREW
+                      </td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]">
+                        {stationCode}
+                      </td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]">
+                        {formattedDate}
+                      </td>
+                    </tr>
+                    <tr className="h-[38px]">
+                      <td className="border border-black px-2 py-1 text-center font-bold text-[13px] leading-tight">
+                        TRANSIT
+                        <br />
+                        STATION
+                      </td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                    </tr>
+                    <tr className="h-[38px]">
+                      <td className="border border-black px-2 py-1 text-center font-bold text-[13px] leading-tight">
+                        ARRIVAL
+                        <br />
+                        STATION
+                      </td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                      <td className="border border-black px-2 py-1 text-center text-[13px]"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    const filteredMassReports = massReports.filter((m) => {
+      if (savedMassStationFilter !== 'ALL' && (m.station || 'DAC').toUpperCase() !== savedMassStationFilter) {
+        return false;
+      }
+      if (savedMassSearch.trim() !== '') {
+        const q = savedMassSearch.trim().toUpperCase();
+        const matchFlight = (m.flightNoInput || '').toUpperCase().includes(q);
+        const matchDest = (m.destInput || '').toUpperCase().includes(q);
+        const matchCat = (m.categoryInput || '').toUpperCase().includes(q);
+        const matchUser = (m.preparedBy || '').toUpperCase().includes(q);
+        const matchDate = (m.dateInput || '').toUpperCase().includes(q);
+        if (!matchFlight && !matchDest && !matchCat && !matchUser && !matchDate) return false;
+      }
+      return true;
+    });
+
+    return (
+      <div className="flex-1 p-4 md:p-8 min-h-screen flex flex-col items-center">
+        <div className="max-w-7xl w-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 shadow-2xl rounded-2xl p-5 md:p-8 text-slate-200">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center pb-5 mb-6 border-b border-slate-800 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 text-xs font-black tracking-wider uppercase mb-2">
+                <FileText className="w-3.5 h-3.5" />
+                <span>SUPER ADMIN &bull; STATION-WISE SAVED MAAS FORMS</span>
+              </div>
+              <h1 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
+                <FileText className="w-6 h-6 text-purple-400" />
+                <span>SAVED MAAS FORM HISTORY ({filteredMassReports.length})</span>
+              </h1>
+              <p className="text-xs text-slate-400 font-sans mt-0.5 uppercase tracking-wider">
+                READ, PRINT AND DELETE SAVED MAAS / WCHR FORMS STATION-WISE IN REAL TIME
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage('admin-dashboard')}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>PREVIOUS</span>
+              </button>
+              <button
+                type="button"
+                onClick={onDashboard}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow uppercase"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>DASHBOARD</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage('admin-saved-flight')}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>SAVED FLIGHT</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage('admin-saved-maas')}
+                className="px-3.5 py-2 rounded-xl bg-purple-500 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase ring-2 ring-purple-300"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>SAVED MAAS FORM</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage('admin-logs')}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>LOG CHECK</span>
+              </button>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow uppercase"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>LOG OUT</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Station Filter Bar & Search */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6 bg-slate-800/70 p-4 rounded-2xl border border-slate-700 font-sans">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-amber-300 uppercase flex items-center gap-1.5 mr-1">
+                <Building2 className="w-4 h-4" />
+                <span>STATION:</span>
+              </span>
+              {['ALL', ...Object.keys(STATION_ADMIN_PASSWORDS)].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setSavedMassStationFilter(st)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase cursor-pointer transition-all border ${
+                    savedMassStationFilter === st
+                      ? 'bg-purple-500 text-white border-purple-300 shadow-lg'
+                      : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                  }`}
+                >
+                  {st === 'ALL' ? 'ALL STATIONS' : st}
+                </button>
+              ))}
+            </div>
+
+            <input
+              type="text"
+              placeholder="SEARCH FLIGHT / DATE / CATEGORY / USER..."
+              value={savedMassSearch}
+              onChange={(e) => setSavedMassSearch(e.target.value.toUpperCase())}
+              className="p-2 rounded-xl bg-slate-900 border border-slate-600 text-white text-xs font-bold uppercase focus:border-purple-400 focus:outline-none min-w-[240px]"
+            />
+          </div>
+
+          {/* Saved MAAS Forms Table */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-700 shadow-inner">
+            <table className="w-full border-collapse text-xs md:text-sm font-sans uppercase">
+              <thead>
+                <tr className="bg-slate-800 text-amber-300 border-b border-slate-700">
+                  <th className="p-3.5 text-center font-bold whitespace-nowrap">SL</th>
+                  <th className="p-3.5 text-center font-bold whitespace-nowrap">STATION</th>
+                  <th className="p-3.5 text-center font-bold whitespace-nowrap">DATE</th>
+                  <th className="p-3.5 text-center font-bold whitespace-nowrap">FLIGHT NO</th>
+                  <th className="p-3.5 text-center font-bold whitespace-nowrap">DESTINATION</th>
+                  <th className="p-3.5 text-center font-bold whitespace-nowrap">CATEGORY</th>
+                  <th className="p-3.5 text-center font-bold whitespace-nowrap">SAVED BY</th>
+                  <th className="p-3.5 text-center font-bold whitespace-nowrap">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMassReports.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-10 text-center text-slate-400 font-bold">
+                      NO SAVED MAAS FORMS FOUND FOR{' '}
+                      {savedMassStationFilter === 'ALL'
+                        ? 'ANY STATION'
+                        : `STATION ${savedMassStationFilter}`}
+                      .
+                    </td>
+                  </tr>
+                ) : (
+                  filteredMassReports.map((m, idx) => (
+                    <tr
+                      key={m.id}
+                      className="border-b border-slate-800 hover:bg-slate-800/60 transition-colors"
+                    >
+                      <td className="p-3.5 text-center font-mono font-bold text-slate-400">
+                        {String(idx + 1).padStart(2, '0')}
+                      </td>
+                      <td className="p-3.5 text-center whitespace-nowrap">
+                        <span className="px-2.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 font-black">
+                          {m.station || 'DAC'}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-center font-bold text-white whitespace-nowrap">
+                        {formatMassDate(m.dateInput)}
+                      </td>
+                      <td className="p-3.5 text-center font-black text-sky-300 whitespace-nowrap">
+                        BS-{m.flightNoInput}
+                      </td>
+                      <td className="p-3.5 text-center font-bold text-white whitespace-nowrap">
+                        {m.destInput}
+                      </td>
+                      <td className="p-3.5 text-center font-bold text-amber-300 whitespace-nowrap">
+                        {m.categoryInput || 'MAAS'}
+                      </td>
+                      <td className="p-3.5 text-center font-bold text-indigo-300 whitespace-nowrap">
+                        {m.preparedBy || 'OFFICER'}
+                        {m.usbaId && (
+                          <span className="block text-[10px] text-slate-400">
+                            USBA-{m.usbaId}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setActiveMassReportPreview(m)}
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center gap-1 cursor-pointer shadow"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>READ / PRINT</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteMassReportFromCloud(
+                                m.id,
+                                m.flightNoInput,
+                                m.dateInput,
+                                userInfo
+                              );
+                              showToast(`DELETED MAAS FORM BS-${m.flightNoInput} (${m.station})`);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-black text-xs flex items-center gap-1 cursor-pointer shadow"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>DELETE</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ================= 3. ADMIN DASHBOARD (FULL DAY FLIGHT DATA REPORT) =================
   return (
     <div className="flex-1 p-4 md:p-8 min-h-screen flex flex-col items-center">
@@ -707,14 +1462,35 @@ export const AdminModule: React.FC<Props> = ({
             </button>
 
             {adminRole === 'super' && (
-              <button
-                type="button"
-                onClick={() => setCurrentPage('admin-logs')}
-                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
-              >
-                <Activity className="w-3.5 h-3.5" />
-                <span>LOG CHECK</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage('admin-saved-flight')}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>SAVED FLIGHT</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMassReportPreview(null);
+                    setCurrentPage('admin-saved-maas');
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>SAVED MAAS FORM</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage('admin-logs')}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg uppercase"
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>LOG CHECK</span>
+                </button>
+              </>
             )}
 
             <button
@@ -980,10 +1756,17 @@ export const AdminModule: React.FC<Props> = ({
                     </td>
                     <td className="p-3 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
-                        {onLoadFlightReport && r.rawFormData && (
+                        {onLoadFlightReport && (
                           <button
                             type="button"
-                            onClick={() => onLoadFlightReport(r.rawFormData!)}
+                            onClick={() => {
+                              const loaded = reconstructFormDataFromStoredReport(r);
+                              onLoadFlightReport(loaded, {
+                                userName: r.preparedBy || userInfo.userName,
+                                usbaId: r.usbaId || userInfo.usbaId,
+                                stationName: r.station || userInfo.stationName,
+                              });
+                            }}
                             className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
                             title="Open Full Report Card & Table"
                           >

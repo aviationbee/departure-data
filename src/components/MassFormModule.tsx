@@ -107,7 +107,7 @@ const DESTINATION_OPTIONS = [
   'DOH',
 ];
 
-function formatMassDate(dateStr: string): string {
+export function formatMassDate(dateStr: string): string {
   if (!dateStr) return '';
   const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   const parts = dateStr.split('-');
@@ -126,7 +126,7 @@ function formatMassDate(dateStr: string): string {
   return `${day} ${month} ${year}`;
 }
 
-function parseMassFLST(text: string, selectedCategory: string): MassPassenger[] {
+export function parseMassFLST(text: string, selectedCategory: string): MassPassenger[] {
   const paxList: MassPassenger[] = [];
   const lines = (text || '').toUpperCase().split(/\r?\n/);
   let currentPax: MassPassenger | null = null;

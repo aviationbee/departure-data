@@ -308,6 +308,12 @@ export default function App() {
   const handlePreviousPage = () => {
     if (currentPage === 'dual-report' && viewedSavedReport) {
       setViewedSavedReport(null);
+      if (pageHistory.length > 0) {
+        const prev = pageHistory[pageHistory.length - 1];
+        setPageHistory((h) => h.slice(0, -1));
+        setCurrentPage(prev);
+        return;
+      }
       setCurrentPage('saved-flights');
       return;
     }
@@ -325,7 +331,11 @@ export default function App() {
       setCurrentPage('mass-dashboard');
     } else if (currentPage === 'mass-dashboard') {
       setCurrentPage('mass-login');
-    } else if (currentPage === 'admin-logs') {
+    } else if (
+      currentPage === 'admin-logs' ||
+      currentPage === 'admin-saved-flight' ||
+      currentPage === 'admin-saved-maas'
+    ) {
       setCurrentPage('admin-dashboard');
     } else if (currentPage === 'admin-dashboard') {
       setCurrentPage('welcome');
@@ -2494,6 +2504,8 @@ export default function App() {
       {/* ================= ADMIN ONLY PAGES ================= */}
       {(currentPage === 'admin-login' ||
         currentPage === 'admin-dashboard' ||
+        currentPage === 'admin-saved-flight' ||
+        currentPage === 'admin-saved-maas' ||
         currentPage === 'admin-logs') && (
         <AdminModule
           currentPage={currentPage}
@@ -2503,8 +2515,11 @@ export default function App() {
           onLogout={handleLogout}
           userInfo={userInfo}
           showToast={showToast}
-          onLoadFlightReport={(loadedData) => {
-            setFormData(loadedData);
+          onLoadFlightReport={(loadedData, reportUser) => {
+            setViewedSavedReport({
+              formData: loadedData,
+              user: reportUser || userInfo,
+            });
             navigateToPage('dual-report');
           }}
         />
