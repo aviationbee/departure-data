@@ -246,8 +246,12 @@ export const AdminModule: React.FC<Props> = ({
   );
 
   // Download Flight Reports as Excel (.CSV with UTF-8 BOM)
-  const handleDownloadExcel = () => {
-    if (filteredReports.length === 0) {
+  const handleDownloadExcel = (
+    customReports?: StoredFlightReport[],
+    customLabel?: string
+  ) => {
+    const targetReports = customReports ?? filteredReports;
+    if (targetReports.length === 0) {
       showToast('NO FLIGHT DATA FOUND TO DOWNLOAD!');
       return;
     }
@@ -265,6 +269,17 @@ export const AdminModule: React.FC<Props> = ({
       'C/ON',
       'DOOR OPEN',
       'ARRIVAL STATUS',
+      'ARR PAX ADULT',
+      'ARR PAX INFANT',
+      'ARR BAG WEIGHT (KG)',
+      'ARR BAG PCS',
+      'ARR CARGO WEIGHT (KG)',
+      'ARR CARGO PCS',
+      'ARR MAIL',
+      'ARR VIP',
+      'ARR CIP',
+      'ARR MAAS',
+      'ARR REMARKS',
       'STD',
       'DOOR CLOSED',
       'C/OFF',
@@ -280,8 +295,13 @@ export const AdminModule: React.FC<Props> = ({
       'TOTAL PAX',
       'BAG WEIGHT (KG)',
       'BAG PCS',
+      'BAG COM NO',
       'CARGO WEIGHT (KG)',
       'CARGO PCS',
+      'CARGO COM NO',
+      'CREW BAG WEIGHT (KG)',
+      'CREW BAG PCS',
+      'CREW BAG COM NO',
       'MAIL',
       'COUNTER NOSHOW',
       'NOSHOW PNR',
@@ -297,6 +317,7 @@ export const AdminModule: React.FC<Props> = ({
       'LOAD CONTROLLER',
       'RAMP OFFICER',
       'CHECK IN STAFF',
+      'PAX HANDLING',
       'REMARKS',
       'REPORT BY',
       'USBA ID',
@@ -319,56 +340,76 @@ export const AdminModule: React.FC<Props> = ({
       return clean ? `="${clean}"` : '';
     };
 
-    const rows = filteredReports.map((r) => [
-      r.date,
-      r.station,
-      r.flightNo,
-      r.route,
-      r.acReg,
-      r.acType,
-      r.captain,
-      toExcelTextMode(r.configure),
-      r.sta,
-      r.chocksOn,
-      r.doorOpen,
-      r.arrivalStatus,
-      r.std,
-      r.doorClosed,
-      r.chocksOff,
-      r.airborne,
-      r.departureStatus,
-      r.delayReason,
-      r.flightLoad,
-      r.fuelUplift,
-      r.paxMale,
-      r.paxFemale,
-      r.paxChild,
-      r.paxInfant,
-      r.paxTotal,
-      r.baggageWeight,
-      r.baggagePcs,
-      r.cargoWeight,
-      r.cargoPcs,
-      r.mail,
-      r.counterNoshow,
-      r.noshowPnr,
-      r.gateNoShow,
-      r.selfOffload,
-      r.vip,
-      r.cip,
-      r.maas,
-      r.wchrSeat ? `${r.wchrFig} (${r.wchrSeat})` : r.wchrFig,
-      r.wchcSeat ? `${r.wchcFig} (${r.wchcSeat})` : r.wchcFig,
-      r.umPaxSeat ? `${r.umPax} (${r.umPaxSeat})` : r.umPax,
-      r.fireArmsSeat ? `${r.fireArms} (${r.fireArmsSeat})` : r.fireArms,
-      r.loadController,
-      r.rampOfficer,
-      r.checkInStaff,
-      r.remarks,
-      r.preparedBy,
-      `USBA-${r.usbaId}`,
-      new Date(r.createdAt).toLocaleString(),
-    ]);
+    const rows = targetReports.map((r) => {
+      const raw = r.rawFormData;
+      return [
+        r.date,
+        r.station,
+        r.flightNo,
+        r.route,
+        r.acReg,
+        r.acType,
+        r.captain,
+        toExcelTextMode(r.configure),
+        r.sta || raw?.sta || '',
+        r.chocksOn || raw?.chocksOn || '',
+        r.doorOpen || raw?.doorOpen || '',
+        r.arrivalStatus || raw?.arrivalStatus || '',
+        raw?.arrPaxAdult || '',
+        raw?.arrPaxInfant || '',
+        raw?.arrBaggageWeight || '',
+        raw?.arrBaggagePcs || '',
+        raw?.arrCargoWeight || '',
+        raw?.arrCargoPcs || '',
+        raw?.arrMail || '',
+        raw?.arrVip || '',
+        raw?.arrCip || '',
+        raw?.arrMaas || '',
+        raw?.arrRemarks || '',
+        r.std,
+        r.doorClosed,
+        r.chocksOff,
+        r.airborne,
+        r.departureStatus,
+        r.delayReason,
+        r.flightLoad,
+        r.fuelUplift,
+        r.paxMale,
+        r.paxFemale,
+        r.paxChild,
+        r.paxInfant,
+        r.paxTotal,
+        r.baggageWeight,
+        r.baggagePcs,
+        raw?.baggageComNo || '',
+        r.cargoWeight,
+        r.cargoPcs,
+        raw?.cargoComNo || '',
+        raw?.crewBagWeight || '',
+        raw?.crewBagPcs || '',
+        raw?.crewBagComNo || '',
+        r.mail,
+        r.counterNoshow,
+        r.noshowPnr,
+        r.gateNoShow,
+        r.selfOffload,
+        r.vip,
+        r.cip,
+        r.maas,
+        r.wchrSeat ? `${r.wchrFig} (${r.wchrSeat})` : r.wchrFig,
+        r.wchcSeat ? `${r.wchcFig} (${r.wchcSeat})` : r.wchcFig,
+        r.umPaxSeat ? `${r.umPax} (${r.umPaxSeat})` : r.umPax,
+        r.fireArmsSeat ? `${r.fireArms} (${r.fireArmsSeat})` : r.fireArms,
+        r.loadController,
+        r.rampOfficer,
+        r.checkInStaff,
+        r.paxHandling || raw?.paxHandling || '',
+        r.remarks,
+        r.preparedBy,
+        `USBA-${r.usbaId}`,
+        new Date(r.createdAt).toLocaleString(),
+      ];
+    });
 
     const csvContent =
       '\uFEFF' +
@@ -379,7 +420,8 @@ export const AdminModule: React.FC<Props> = ({
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const stLabel = adminRole === 'super' ? selectedStationFilter : authorizedStation;
+    const stLabel =
+      customLabel ?? (adminRole === 'super' ? selectedStationFilter : authorizedStation);
     const dtLabel = showAllDates ? '90DAYS' : selectedDate;
     link.href = url;
     link.setAttribute('download', `USBA_FLIGHT_REPORT_${stLabel}_${dtLabel}.csv`);
@@ -733,6 +775,28 @@ export const AdminModule: React.FC<Props> = ({
       return true;
     });
 
+    const sfTotalFlights = filteredSavedFlights.length;
+    const sfTotalPax = filteredSavedFlights.reduce(
+      (sum, r) => sum + (parseInt(r.paxTotal, 10) || 0),
+      0
+    );
+    const sfTotalBagKg = filteredSavedFlights.reduce(
+      (sum, r) => sum + (parseInt(r.baggageWeight, 10) || 0),
+      0
+    );
+    const sfTotalBagPcs = filteredSavedFlights.reduce(
+      (sum, r) => sum + (parseInt(r.baggagePcs, 10) || 0),
+      0
+    );
+    const sfTotalCargoKg = filteredSavedFlights.reduce(
+      (sum, r) => sum + (parseInt(r.cargoWeight, 10) || 0),
+      0
+    );
+    const sfTotalNoshow = filteredSavedFlights.reduce(
+      (sum, r) => sum + (parseInt(r.counterNoshow, 10) || 0),
+      0
+    );
+
     return (
       <div className="flex-1 p-4 md:p-8 min-h-screen flex flex-col items-center">
         <div className="max-w-7xl w-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 shadow-2xl rounded-2xl p-5 md:p-8 text-slate-200">
@@ -849,6 +913,46 @@ export const AdminModule: React.FC<Props> = ({
                 onChange={(e) => setSavedFlightSearch(e.target.value.toUpperCase())}
                 className="p-2 rounded-xl bg-slate-900 border border-slate-600 text-white text-xs font-bold uppercase focus:border-emerald-400 focus:outline-none min-w-[220px]"
               />
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleDownloadExcel(
+                    filteredSavedFlights,
+                    `SAVED_${savedFlightStationFilter}`
+                  )
+                }
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all"
+              >
+                <Download className="w-4 h-4" />
+                <span>DOWNLOAD EXCEL ({filteredSavedFlights.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Full-Day Summary KPIs Display Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 font-sans">
+            <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
+              <div className="text-[11px] font-bold text-slate-400 uppercase">TOTAL FLIGHTS</div>
+              <div className="text-2xl font-black text-amber-400 mt-1">{sfTotalFlights}</div>
+            </div>
+            <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
+              <div className="text-[11px] font-bold text-slate-400 uppercase">TOTAL PASSENGERS</div>
+              <div className="text-2xl font-black text-sky-400 mt-1">{sfTotalPax}</div>
+            </div>
+            <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
+              <div className="text-[11px] font-bold text-slate-400 uppercase">TOTAL BAGGAGE</div>
+              <div className="text-lg font-black text-emerald-400 mt-1">
+                {sfTotalBagKg} KG / {sfTotalBagPcs} PCS
+              </div>
+            </div>
+            <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
+              <div className="text-[11px] font-bold text-slate-400 uppercase">TOTAL CARGO</div>
+              <div className="text-lg font-black text-indigo-300 mt-1">{sfTotalCargoKg} KG</div>
+            </div>
+            <div className="bg-slate-800/90 border border-rose-500/40 rounded-xl p-3.5 text-center">
+              <div className="text-[11px] font-bold text-rose-300 uppercase">COUNTER NOSHOW</div>
+              <div className="text-2xl font-black text-rose-400 mt-1">{sfTotalNoshow}</div>
             </div>
           </div>
 
@@ -1643,7 +1747,7 @@ export const AdminModule: React.FC<Props> = ({
           <div className="flex flex-col justify-end">
             <button
               type="button"
-              onClick={handleDownloadExcel}
+              onClick={() => handleDownloadExcel()}
               className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all"
             >
               <Download className="w-4 h-4" />

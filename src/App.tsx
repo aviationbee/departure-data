@@ -59,6 +59,7 @@ import {
   Megaphone,
   FolderOpen,
   Eye,
+  Download,
 } from 'lucide-react';
 
 const STATION_OPTIONS = [
@@ -824,6 +825,211 @@ export default function App() {
     return Boolean(isTodayFlightDate || isCreatedToday);
   });
 
+  // Station Today's Saved Flights KPI Totals
+  const savedTotalFlights = todayStationSavedFlights.length;
+  const savedTotalPax = todayStationSavedFlights.reduce(
+    (sum, r) => sum + (parseInt(r.paxTotal, 10) || 0),
+    0
+  );
+  const savedTotalBagKg = todayStationSavedFlights.reduce(
+    (sum, r) => sum + (parseInt(r.baggageWeight, 10) || 0),
+    0
+  );
+  const savedTotalBagPcs = todayStationSavedFlights.reduce(
+    (sum, r) => sum + (parseInt(r.baggagePcs, 10) || 0),
+    0
+  );
+  const savedTotalCargoKg = todayStationSavedFlights.reduce(
+    (sum, r) => sum + (parseInt(r.cargoWeight, 10) || 0),
+    0
+  );
+  const savedTotalNoshow = todayStationSavedFlights.reduce(
+    (sum, r) => sum + (parseInt(r.counterNoshow, 10) || 0),
+    0
+  );
+
+  // Download Station's Saved Flight Data as Excel (.CSV with UTF-8 BOM) with all data
+  const handleDownloadStationSavedExcel = () => {
+    if (todayStationSavedFlights.length === 0) {
+      showToast('NO FLIGHT DATA FOUND TO DOWNLOAD!');
+      return;
+    }
+
+    const headers = [
+      'DATE',
+      'STATION',
+      'FLIGHT NO',
+      'ROUTE',
+      'A/C REG',
+      'A/C TYPE',
+      'CAPTAIN',
+      'CREW CONFIG',
+      'STA',
+      'C/ON',
+      'DOOR OPEN',
+      'ARRIVAL STATUS',
+      'ARR PAX ADULT',
+      'ARR PAX INFANT',
+      'ARR BAG WEIGHT (KG)',
+      'ARR BAG PCS',
+      'ARR CARGO WEIGHT (KG)',
+      'ARR CARGO PCS',
+      'ARR MAIL',
+      'ARR VIP',
+      'ARR CIP',
+      'ARR MAAS',
+      'ARR REMARKS',
+      'STD',
+      'DOOR CLOSED',
+      'C/OFF',
+      'AIRBORNE',
+      'DEPARTURE STATUS',
+      'DELAY REASON',
+      'FLIGHT LOAD',
+      'FUEL (KG)',
+      'PAX MALE',
+      'PAX FEMALE',
+      'PAX CHILD',
+      'PAX INFANT',
+      'TOTAL PAX',
+      'BAG WEIGHT (KG)',
+      'BAG PCS',
+      'BAG COM NO',
+      'CARGO WEIGHT (KG)',
+      'CARGO PCS',
+      'CARGO COM NO',
+      'CREW BAG WEIGHT (KG)',
+      'CREW BAG PCS',
+      'CREW BAG COM NO',
+      'MAIL',
+      'COUNTER NOSHOW',
+      'NOSHOW PNR',
+      'GATE NOSHOW',
+      'SELF OFFLOAD',
+      'VIP',
+      'CIP',
+      'MAAS',
+      'WCHR (SEAT)',
+      'WCHC (SEAT)',
+      'UM PAX (SEAT)',
+      'FIRE ARMS (SEAT)',
+      'LOAD CONTROLLER',
+      'RAMP OFFICER',
+      'CHECK IN STAFF',
+      'PAX HANDLING',
+      'REMARKS',
+      'REPORT BY',
+      'USBA ID',
+      'SAVED AT',
+    ];
+
+    const escapeCsv = (val: string | number | undefined) => {
+      const raw = String(val ?? '');
+      if (raw.startsWith('="') && raw.endsWith('"')) {
+        const inner = raw.slice(2, -1).replace(/"/g, '""');
+        return `="${inner}"`;
+      }
+      const str = raw.replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const toExcelTextMode = (val: string | undefined) => {
+      const clean = String(val ?? '').trim();
+      return clean ? `="${clean}"` : '';
+    };
+
+    const rows = todayStationSavedFlights.map((r) => {
+      const raw = r.rawFormData;
+      return [
+        r.date,
+        r.station,
+        r.flightNo,
+        r.route,
+        r.acReg,
+        r.acType,
+        r.captain,
+        toExcelTextMode(r.configure),
+        r.sta || raw?.sta || '',
+        r.chocksOn || raw?.chocksOn || '',
+        r.doorOpen || raw?.doorOpen || '',
+        r.arrivalStatus || raw?.arrivalStatus || '',
+        raw?.arrPaxAdult || '',
+        raw?.arrPaxInfant || '',
+        raw?.arrBaggageWeight || '',
+        raw?.arrBaggagePcs || '',
+        raw?.arrCargoWeight || '',
+        raw?.arrCargoPcs || '',
+        raw?.arrMail || '',
+        raw?.arrVip || '',
+        raw?.arrCip || '',
+        raw?.arrMaas || '',
+        raw?.arrRemarks || '',
+        r.std,
+        r.doorClosed,
+        r.chocksOff,
+        r.airborne,
+        r.departureStatus,
+        r.delayReason,
+        r.flightLoad,
+        r.fuelUplift,
+        r.paxMale,
+        r.paxFemale,
+        r.paxChild,
+        r.paxInfant,
+        r.paxTotal,
+        r.baggageWeight,
+        r.baggagePcs,
+        raw?.baggageComNo || '',
+        r.cargoWeight,
+        r.cargoPcs,
+        raw?.cargoComNo || '',
+        raw?.crewBagWeight || '',
+        raw?.crewBagPcs || '',
+        raw?.crewBagComNo || '',
+        r.mail,
+        r.counterNoshow,
+        r.noshowPnr,
+        r.gateNoShow,
+        r.selfOffload,
+        r.vip,
+        r.cip,
+        r.maas,
+        r.wchrSeat ? `${r.wchrFig} (${r.wchrSeat})` : r.wchrFig,
+        r.wchcSeat ? `${r.wchcFig} (${r.wchcSeat})` : r.wchcFig,
+        r.umPaxSeat ? `${r.umPax} (${r.umPaxSeat})` : r.umPax,
+        r.fireArmsSeat ? `${r.fireArms} (${r.fireArmsSeat})` : r.fireArms,
+        r.loadController,
+        r.rampOfficer,
+        r.checkInStaff,
+        r.paxHandling || raw?.paxHandling || '',
+        r.remarks,
+        r.preparedBy,
+        `USBA-${r.usbaId}`,
+        new Date(r.createdAt).toLocaleString(),
+      ];
+    });
+
+    const csvContent =
+      '\uFEFF' +
+      [headers.map(escapeCsv).join(','), ...rows.map((row) => row.map(escapeCsv).join(','))].join(
+        '\r\n'
+      );
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute(
+      'download',
+      `USBA_SAVED_FLIGHT_DATA_${currentStationUpper}_${todayLocalDate}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('EXCEL (.CSV) DOWNLOADED SUCCESSFULLY!');
+  };
+
   const departureMessage = generateFlightDepartureMessage(
     activeReportFormData,
     activeReportUser,
@@ -1034,6 +1240,15 @@ export default function App() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  onClick={handleDownloadStationSavedExcel}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>DOWNLOAD EXCEL ({todayStationSavedFlights.length})</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handlePreviousPage}
                   className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
                 >
@@ -1058,6 +1273,32 @@ export default function App() {
                   <LogOut className="w-3.5 h-3.5" />
                   <span>LOG OUT</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Full-Day Summary KPIs Display Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 font-sans">
+              <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
+                <div className="text-[11px] font-bold text-slate-400 uppercase">TOTAL FLIGHTS</div>
+                <div className="text-2xl font-black text-amber-400 mt-1">{savedTotalFlights}</div>
+              </div>
+              <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
+                <div className="text-[11px] font-bold text-slate-400 uppercase">TOTAL PASSENGERS</div>
+                <div className="text-2xl font-black text-sky-400 mt-1">{savedTotalPax}</div>
+              </div>
+              <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
+                <div className="text-[11px] font-bold text-slate-400 uppercase">TOTAL BAGGAGE</div>
+                <div className="text-lg font-black text-emerald-400 mt-1">
+                  {savedTotalBagKg} KG / {savedTotalBagPcs} PCS
+                </div>
+              </div>
+              <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
+                <div className="text-[11px] font-bold text-slate-400 uppercase">TOTAL CARGO</div>
+                <div className="text-lg font-black text-indigo-300 mt-1">{savedTotalCargoKg} KG</div>
+              </div>
+              <div className="bg-slate-800/90 border border-rose-500/40 rounded-xl p-3.5 text-center">
+                <div className="text-[11px] font-bold text-rose-300 uppercase">COUNTER NOSHOW</div>
+                <div className="text-2xl font-black text-rose-400 mt-1">{savedTotalNoshow}</div>
               </div>
             </div>
 
