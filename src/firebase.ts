@@ -265,14 +265,15 @@ export function reconstructFormDataFromStoredReport(r: StoredFlightReport): Flig
 // Save Flight Report to Firestore (preserved for 90 days)
 export async function saveFlightReportToCloud(
   formData: FlightFormData,
-  userInfo: UserInfo
+  userInfo: UserInfo,
+  originalCreatedAt?: string
 ): Promise<void> {
   const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
   const date = formData.date || new Date().toISOString().split('T')[0];
   const flightNo = `BS-${(formData.flightNoSuffix || '000').trim().toUpperCase()}`;
   const docId = `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}`;
   const now = Date.now();
-  const createdAt = new Date(now).toISOString();
+  const createdAt = originalCreatedAt || new Date(now).toISOString();
   const expiresAt = now + NINETY_DAYS_MS;
 
   const payload: Omit<StoredFlightReport, 'id'> = {

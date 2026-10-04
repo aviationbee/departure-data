@@ -35,6 +35,7 @@ import {
   subscribeToFlightReports,
   syncRealtimeDataOnActivity,
   reconstructFormDataFromStoredReport,
+  deleteFlightReportFromCloud,
   StoredFlightReport,
   SystemNoticeDoc,
 } from './firebase';
@@ -61,6 +62,7 @@ import {
   FolderOpen,
   Eye,
   Download,
+  Edit3,
 } from 'lucide-react';
 
 const STATION_OPTIONS = [
@@ -245,6 +247,10 @@ export default function App() {
   const [viewedSavedReport, setViewedSavedReport] = useState<{
     formData: FlightFormData;
     user: UserInfo;
+  } | null>(null);
+  const [editingReportInfo, setEditingReportInfo] = useState<{
+    id: string;
+    createdAt: string;
   } | null>(null);
   const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
@@ -600,6 +606,7 @@ export default function App() {
     setHighlightRedBoxes(false);
     setVisitedNoshowPnr(false);
     setShowRedBoxWarningModal(false);
+    setEditingReportInfo(null);
   };
 
   // Navigation handlers
@@ -672,6 +679,53 @@ export default function App() {
     }
   };
 
+  // 60-Minute Edit Window Checker (For All Stations)
+  const isReportLocked = (createdAtStr?: string): boolean => {
+    if (!createdAtStr) return false;
+    const createdTime = new Date(createdAtStr).getTime();
+    if (isNaN(createdTime)) return false;
+    return Date.now() - createdTime > 60 * 60 * 1000;
+  };
+
+  const getEditRemainingMinutes = (createdAtStr?: string): number => {
+    if (!createdAtStr) return 0;
+    const createdTime = new Date(createdAtStr).getTime();
+    if (isNaN(createdTime)) return 0;
+    const diffMs = 60 * 60 * 1000 - (Date.now() - createdTime);
+    return Math.max(0, Math.ceil(diffMs / 60000));
+  };
+
+  const handleEditSavedFlight = (r: StoredFlightReport) => {
+    if (isReportLocked(r.createdAt)) {
+      showToast('THIS REPORT IS LOCKED (60 MINUTES PASSED SINCE GENERATION)');
+      return;
+    }
+
+    const loadedData = reconstructFormDataFromStoredReport(r);
+    setFormData(loadedData);
+    setEditingReportInfo({
+      id: r.id,
+      createdAt: r.createdAt,
+    });
+    setViewedSavedReport(null);
+
+    // Determine domestic vs international
+    const cleanNum = (loadedData.flightNoSuffix || r.flightNo || '').replace(/\D/g, '');
+    const num = parseInt(cleanNum, 10);
+    const intlAirports = [
+      'DXB', 'SHJ', 'AUH', 'RUH', 'JED', 'MLE', 'BKK', 'MCT', 'DOH', 'CCU', 'MAA', 'CAN', 'SIN', 'KUL'
+    ];
+    const isIntl =
+      (!isNaN(num) && num >= 200) ||
+      intlAirports.some((code) => (loadedData.route || r.route || '').includes(code));
+
+    const targetPage: PageMode = isIntl ? 'data-intl' : 'data-dom';
+    setReportType(isIntl ? 'intl' : 'dom');
+    setLastDataPage(targetPage);
+    navigateToPage(targetPage);
+    showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED FOR EDITING (60-MIN WINDOW ACTIVE)`);
+  };
+
   const handleGenerateReport = (type: 'intl' | 'dom') => {
     if (hasAnyRedBoxMissing) {
       setHighlightRedBoxes(true);
@@ -680,13 +734,26 @@ export default function App() {
     }
 
     // Automatically save flight data to Cloud Firestore (preserved for 90 days) & log activity
-    saveFlightReportToCloud(formData, userInfo);
+    const originalCreatedAt = editingReportInfo?.createdAt;
+    saveFlightReportToCloud(formData, userInfo, originalCreatedAt);
+
+    // If flight number or date changed during edit, clean up old docId to avoid duplicates
+    const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
+    const date = formData.date || new Date().toISOString().split('T')[0];
+    const flightNo = `BS-${(formData.flightNoSuffix || '000').trim().toUpperCase()}`;
+    const newDocId = `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}`;
+
+    if (editingReportInfo?.id && editingReportInfo.id !== newDocId) {
+      deleteFlightReportFromCloud({ id: editingReportInfo.id } as StoredFlightReport, userInfo);
+    }
+
     logUserActivity(
-      'FLIGHT REPORT GENERATED',
-      `Generated Flight Report BS-${formData.flightNoSuffix || '000'} (${formData.route || 'N/A'}) Date: ${formData.date}`,
+      editingReportInfo ? 'FLIGHT REPORT EDITED' : 'FLIGHT REPORT GENERATED',
+      `${editingReportInfo ? 'Updated & saved' : 'Generated'} Flight Report BS-${formData.flightNoSuffix || '000'} (${formData.route || 'N/A'}) Date: ${formData.date}`,
       userInfo
     );
 
+    setEditingReportInfo(null);
     setViewedSavedReport(null);
     setReportType(type);
     navigateToPage('dual-report');
@@ -1544,7 +1611,7 @@ export default function App() {
                   <span>SAVED FLIGHT DATA ({todayStationSavedFlights.length})</span>
                 </h1>
                 <p className="text-xs text-slate-400 font-sans mt-0.5 uppercase tracking-wider">
-                  REAL-TIME TODAY&apos;S FLIGHT LIST FOR STATION {currentStationUpper} &mdash; CLICK &ldquo;OPEN&rdquo; TO VIEW &amp; PRINT REPORTS (READ-ONLY)
+                  REAL-TIME TODAY&apos;S FLIGHT LIST FOR STATION {currentStationUpper} &mdash; CLICK &ldquo;OPEN&rdquo; TO VIEW OR &ldquo;EDIT&rdquo; TO MODIFY WITHIN 60 MINS
                 </p>
               </div>
 
@@ -1673,25 +1740,49 @@ export default function App() {
                           )}
                         </td>
                         <td className="p-3.5 text-center whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const loadedData = reconstructFormDataFromStoredReport(r);
-                              setViewedSavedReport({
-                                formData: loadedData,
-                                user: {
-                                  userName: r.preparedBy || userInfo.userName,
-                                  usbaId: r.usbaId || userInfo.usbaId,
-                                  stationName: r.station || userInfo.stationName,
-                                },
-                              });
-                              navigateToPage('dual-report');
-                            }}
-                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>OPEN</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const loadedData = reconstructFormDataFromStoredReport(r);
+                                setViewedSavedReport({
+                                  formData: loadedData,
+                                  user: {
+                                    userName: r.preparedBy || userInfo.userName,
+                                    usbaId: r.usbaId || userInfo.usbaId,
+                                    stationName: r.station || userInfo.stationName,
+                                  },
+                                });
+                                navigateToPage('dual-report');
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs tracking-wider uppercase shadow cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>OPEN</span>
+                            </button>
+
+                            {!isReportLocked(r.createdAt) ? (
+                              <button
+                                type="button"
+                                onClick={() => handleEditSavedFlight(r)}
+                                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                                title={`Editable within 60 mins from generation (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>EDIT</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-500 border border-slate-700 font-bold text-xs tracking-wider uppercase cursor-not-allowed inline-flex items-center gap-1.5 opacity-60"
+                                title="Edit locked (60 minutes passed since generation)"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                                <span>LOCKED</span>
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1742,6 +1833,16 @@ export default function App() {
                     <MapPin className="w-3 h-3 text-amber-400" />
                     <span>STATION: {userInfo.stationName}</span>
                   </span>
+
+                  {editingReportInfo && (
+                    <>
+                      <span className="text-slate-600 font-bold">|</span>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-500/25 border border-amber-400/70 text-amber-300 font-black text-[11px] animate-pulse">
+                        <Edit3 className="w-3 h-3 text-amber-400" />
+                        <span>EDITING SAVED FLIGHT (LATEST CORRECTION WILL SAVE)</span>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
