@@ -27,6 +27,9 @@ export interface FlightFormData {
   arrCip?: string;
   arrMaas?: string;
   arrRemarks?: string;
+  arrFlightNo?: string;
+  arrRoute?: string;
+  arrPaxReceiving?: string;
   std: string;
   doorClosed: string;
   chocksOff: string;

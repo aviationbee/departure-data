@@ -96,6 +96,9 @@ const INITIAL_FORM_DATA: FlightFormData = {
   arrCip: '',
   arrMaas: '',
   arrRemarks: '',
+  arrFlightNo: '',
+  arrRoute: '',
+  arrPaxReceiving: '',
   std: '',
   doorClosed: '',
   chocksOff: '',
@@ -505,14 +508,57 @@ export default function App() {
     }
   }, [formData.std, formData.chocksOff, formData.delayReason]);
 
-  // Handle Flight No change -> auto Route
+  // Handle Flight No change -> auto Route & auto Arrival Flight No / Route
   const handleFlightNoChange = (val: string) => {
     const cleanVal = val.replace(/\D/g, '').toUpperCase();
     const matchedRoute = findRouteByFlightNo(cleanVal);
+    const parsed = parseInt(cleanVal, 10);
+    const arrNum = !isNaN(parsed) && parsed > 0 ? (parsed % 2 === 0 ? parsed - 1 : parsed) : '';
+    const autoArrFlt = arrNum ? `BS-${arrNum}` : '';
+    const matchedArrRoute = arrNum ? findRouteByFlightNo(String(arrNum)) : '';
+    const fallbackArrRoute = (() => {
+      const parts = (matchedRoute || '').split('-').map((p) => p.trim().toUpperCase()).filter(Boolean);
+      if (parts.length === 2) {
+        if (parts[0] === 'DAC') return `${parts[0]}-${parts[1]}`;
+        return `DAC-${parts[0]}`;
+      }
+      const stn = (userInfo.stationName || '').trim().toUpperCase();
+      return stn && stn !== 'DAC' ? `DAC-${stn}` : '';
+    })();
+    const autoArrRoute = matchedArrRoute || fallbackArrRoute;
+
     setFormData((prev) => ({
       ...prev,
       flightNoSuffix: cleanVal,
       route: matchedRoute || prev.route,
+      arrFlightNo:
+        prev.arrFlightNo && !prev.arrFlightNo.startsWith('BS-') && prev.arrFlightNo !== autoArrFlt
+          ? prev.arrFlightNo
+          : autoArrFlt || prev.arrFlightNo,
+      arrRoute:
+        prev.arrRoute && prev.arrRoute !== autoArrRoute ? prev.arrRoute : autoArrRoute || prev.arrRoute,
+    }));
+  };
+
+  // Handle Arrival Flight No change in ARRIVAL INFORMATION -> auto-calculate arrival Route
+  const handleArrivalFlightNoChange = (val: string) => {
+    const upper = val.toUpperCase();
+    const cleanDigits = upper.replace(/\D/g, '');
+    const matchedRoute = cleanDigits ? findRouteByFlightNo(cleanDigits) : '';
+    const fallbackRoute = (() => {
+      if (!cleanDigits) return '';
+      const stn = (userInfo.stationName || '').trim().toUpperCase();
+      if (stn && stn !== 'DAC') {
+        return `DAC-${stn}`;
+      }
+      return '';
+    })();
+    const autoRoute = matchedRoute || fallbackRoute;
+
+    setFormData((prev) => ({
+      ...prev,
+      arrFlightNo: upper,
+      arrRoute: autoRoute || (upper ? prev.arrRoute : ''),
     }));
   };
 
@@ -753,7 +799,10 @@ export default function App() {
         arrVip: '2',
         arrCip: '1',
         arrMaas: '2',
+        arrPaxReceiving: 'HASAN',
         arrRemarks: 'NIL',
+        arrFlightNo: 'BS-141',
+        arrRoute: 'DAC-CXB',
         std: '1000',
         doorClosed: '0958',
         chocksOff: '0959',
@@ -868,6 +917,9 @@ export default function App() {
       'C/ON',
       'DOOR OPEN',
       'ARRIVAL STATUS',
+      'ARR FLIGHT NO',
+      'ARR ROUTE',
+      'ARR PAX RECEIVING',
       'ARR PAX ADULT',
       'ARR PAX INFANT',
       'ARR BAG WEIGHT (KG)',
@@ -953,6 +1005,9 @@ export default function App() {
         r.chocksOn || raw?.chocksOn || '',
         r.doorOpen || raw?.doorOpen || '',
         r.arrivalStatus || raw?.arrivalStatus || '',
+        raw?.arrFlightNo || '',
+        raw?.arrRoute || '',
+        raw?.arrPaxReceiving || '',
         raw?.arrPaxAdult || '',
         raw?.arrPaxInfant || '',
         raw?.arrBaggageWeight || '',
@@ -1657,6 +1712,36 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* BOX: FLIGHT NO */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        FLIGHT NO
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="E.G. BS-141"
+                        value={formData.arrFlightNo || ''}
+                        onChange={(e) => handleArrivalFlightNoChange(e.target.value)}
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-bold tracking-wider uppercase"
+                      />
+                    </div>
+
+                    {/* BOX: ROUTE */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        ROUTE
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="E.G. DAC-CXB"
+                        value={formData.arrRoute || ''}
+                        onChange={(e) =>
+                          setFormData({ ...formData, arrRoute: e.target.value.toUpperCase() })
+                        }
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-amber-300 focus:border-white focus:outline-none text-sm font-bold tracking-wider uppercase"
+                      />
+                    </div>
+
                     {/* 1ST BOX: STA (LT) */}
                     <div className="flex flex-col">
                       <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
@@ -1864,8 +1949,24 @@ export default function App() {
                       />
                     </div>
 
-                    {/* 12TH BOX: REMARKS */}
-                    <div className="flex flex-col sm:col-span-2 lg:col-span-1">
+                    {/* 12TH BOX: PAX RECEIVING (AFTER MAAS) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
+                        PAX RECEIVING
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="OFFICER / STAFF NAME"
+                        value={formData.arrPaxReceiving || ''}
+                        onChange={(e) =>
+                          setFormData({ ...formData, arrPaxReceiving: e.target.value.toUpperCase() })
+                        }
+                        className="p-2.5 border border-sky-300/70 rounded-xl bg-slate-900/90 text-white focus:border-white focus:outline-none text-sm font-bold uppercase"
+                      />
+                    </div>
+
+                    {/* 13TH BOX: REMARKS */}
+                    <div className="flex flex-col sm:col-span-2 lg:col-span-2">
                       <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase">
                         REMARKS
                       </label>

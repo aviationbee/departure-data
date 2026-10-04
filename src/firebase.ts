@@ -116,6 +116,9 @@ export interface StoredFlightReport {
   chocksOn: string;
   doorOpen: string;
   arrivalStatus: string;
+  arrFlightNo?: string;
+  arrRoute?: string;
+  arrPaxReceiving?: string;
   std: string;
   doorClosed: string;
   chocksOff: string;
@@ -212,6 +215,9 @@ export function reconstructFormDataFromStoredReport(r: StoredFlightReport): Flig
     chocksOn: r.chocksOn || '',
     doorOpen: r.doorOpen || '',
     arrivalStatus: r.arrivalStatus || 'FLIGHT ON TIME ARRIVED',
+    arrFlightNo: r.arrFlightNo || '',
+    arrRoute: r.arrRoute || '',
+    arrPaxReceiving: r.arrPaxReceiving || '',
     std: r.std || '',
     doorClosed: r.doorClosed || '',
     chocksOff: r.chocksOff || '',
@@ -282,6 +288,9 @@ export async function saveFlightReportToCloud(
     chocksOn: formData.chocksOn || '',
     doorOpen: formData.doorOpen || '',
     arrivalStatus: formData.arrivalStatus || '',
+    arrFlightNo: formData.arrFlightNo || '',
+    arrRoute: formData.arrRoute || '',
+    arrPaxReceiving: formData.arrPaxReceiving || '',
     std: formData.std || '',
     doorClosed: formData.doorClosed || '',
     chocksOff: formData.chocksOff || '',

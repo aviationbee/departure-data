@@ -189,11 +189,6 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
               <td className="font-bold p-2 align-top border-r border-black">18. REMARKS</td>
               <td className="p-2 leading-relaxed">
                 : &bull; OFFLOAD: {offloadString}
-                <br />
-                &bull; NOSHOW:{' '}
-                <span className={noshowValue !== 'NIL' ? 'text-red-600 font-bold' : ''}>
-                  {noshowValue}
-                </span>
                 {data.remarks && data.remarks.trim() && (
                   <div className="mt-0.5 font-semibold text-black uppercase">
                     : {data.remarks.trim().toUpperCase()}

@@ -34,11 +34,17 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
     const stn = (user.stationName || '').trim().toUpperCase();
     return stn && stn !== 'DAC' ? `DAC-${stn}` : data.route || 'N/A';
   })();
-  const arrivalRoute = matchedArrivalRoute || fallbackArrivalRoute;
-  const arrivalFlightNoDisplay = `BS-${arrivalFlightNumStr} (${arrivalRoute})`;
+  const arrivalRoute = (data.arrRoute?.trim() || matchedArrivalRoute || fallbackArrivalRoute).toUpperCase();
+  const rawCustomArrFlt = data.arrFlightNo?.trim();
+  const arrivalFlightNoDisplay = rawCustomArrFlt
+    ? rawCustomArrFlt.toUpperCase().startsWith('BS-')
+      ? `${rawCustomArrFlt.toUpperCase()} (${arrivalRoute})`
+      : `BS-${rawCustomArrFlt.toUpperCase()} (${arrivalRoute})`
+    : `BS-${arrivalFlightNumStr} (${arrivalRoute})`;
 
-  // 3. ORIGIN: Always DAC because it is coming from DAC
-  const origin = 'DAC';
+  // 3. ORIGIN: Extracted from arrivalRoute (e.g. DXB-DAC -> DXB, DAC-CXB -> DAC)
+  const routeParts = arrivalRoute.split('-');
+  const origin = routeParts.length >= 2 ? routeParts[0].trim().toUpperCase() : 'DAC';
 
   // Helper: treat empty, '0', '00', 'NIL', 'N/A' as empty
   const isZeroOrEmpty = (val?: string): boolean => {
@@ -74,7 +80,13 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
     : '00';
   const totalCgoMailString = `CGO-${cgoWeight} KG/${cgoPcs} PCS, MAIL-${mailFormatted}`;
 
-  // 10. PAX RECEIVING & 11. UNLOADING -> Name of RAMP OFFICER from data entry page
+  // 10. PAX RECEIVING & 11. UNLOADING -> Name of PAX RECEIVING input or RAMP OFFICER
+  const paxReceivingValue = (
+    data.arrPaxReceiving?.trim() ||
+    data.rampOfficer ||
+    data.loadingStuff ||
+    'N/A'
+  ).toUpperCase();
   const rampOfficerValue = (data.rampOfficer || data.loadingStuff || 'N/A').toUpperCase();
 
   // 12. VIP/CIP/MAAS -> Collected from Arrival input boxes
@@ -158,7 +170,7 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
             </tr>
             <tr className="border border-black">
               <td className="font-bold p-2 align-top border-r border-black">10. PAX RECEIVING</td>
-              <td className="p-2">: {rampOfficerValue}</td>
+              <td className="p-2">: {paxReceivingValue}</td>
             </tr>
             <tr className="border border-black">
               <td className="font-bold p-2 align-top border-r border-black">11. UNLOADING</td>
@@ -171,10 +183,6 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
             <tr className="border border-black">
               <td className="font-bold p-2 align-top border-r border-black">13. HANDLING</td>
               <td className="p-2">: {paxHandlingValue}</td>
-            </tr>
-            <tr className="border border-black">
-              <td className="font-bold p-2 align-top border-r border-black">14. (DOOR OPEN)</td>
-              <td className="p-2">: {data.doorOpen ? `${data.doorOpen} LT` : 'N/A'}</td>
             </tr>
             <tr className="border border-black">
               <td className="font-bold p-2 align-top border-r border-black">REMARKS</td>
