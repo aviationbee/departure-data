@@ -726,6 +726,31 @@ export default function App() {
     showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED FOR EDITING (60-MIN WINDOW ACTIVE)`);
   };
 
+  const handleForceEditSavedFlight = (r: StoredFlightReport) => {
+    const loadedData = reconstructFormDataFromStoredReport(r);
+    setFormData(loadedData);
+    setEditingReportInfo({
+      id: r.id,
+      createdAt: new Date().toISOString(),
+    });
+    setViewedSavedReport(null);
+
+    const cleanNum = (loadedData.flightNoSuffix || r.flightNo || '').replace(/\D/g, '');
+    const num = parseInt(cleanNum, 10);
+    const intlAirports = [
+      'DXB', 'SHJ', 'AUH', 'RUH', 'JED', 'MLE', 'BKK', 'MCT', 'DOH', 'CCU', 'MAA', 'CAN', 'SIN', 'KUL'
+    ];
+    const isIntl =
+      (!isNaN(num) && num >= 200) ||
+      intlAirports.some((code) => (loadedData.route || r.route || '').includes(code));
+
+    const targetPage: PageMode = isIntl ? 'data-intl' : 'data-dom';
+    setReportType(isIntl ? 'intl' : 'dom');
+    setLastDataPage(targetPage);
+    navigateToPage(targetPage);
+    showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN DATA ENTRY PAGE`);
+  };
+
   const handleGenerateReport = (type: 'intl' | 'dom') => {
     if (hasAnyRedBoxMissing) {
       setHighlightRedBoxes(true);
@@ -1741,6 +1766,48 @@ export default function App() {
                         </td>
                         <td className="p-3.5 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">
+                            {/* ACTION BUTTON: EDIT (OR LOCKED AFTER 60 MINS) */}
+                            {!isReportLocked(r.createdAt) ? (
+                              <button
+                                type="button"
+                                onClick={() => handleEditSavedFlight(r)}
+                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                                title={`Click to edit this flight data in Data Entry page (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>EDIT</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const confirmForceEdit = window.confirm(
+                                    `FLIGHT ${r.flightNo}: 60 minutes have passed since report generation (LOCKED).\n\nDo you want to load this flight's data into the Data Entry page to modify and re-generate?`
+                                  );
+                                  if (confirmForceEdit) {
+                                    handleForceEditSavedFlight(r);
+                                  } else {
+                                    const loadedData = reconstructFormDataFromStoredReport(r);
+                                    setViewedSavedReport({
+                                      formData: loadedData,
+                                      user: {
+                                        userName: r.preparedBy || userInfo.userName,
+                                        usbaId: r.usbaId || userInfo.usbaId,
+                                        stationName: r.station || userInfo.stationName,
+                                      },
+                                    });
+                                    navigateToPage('dual-report');
+                                  }
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400/90 border border-slate-700 font-bold text-xs tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-sm"
+                                title="Report is over 60 mins old (LOCKED). Click to view or edit."
+                              >
+                                <Lock className="w-3.5 h-3.5 text-amber-500" />
+                                <span>LOCKED</span>
+                              </button>
+                            )}
+
+                            {/* VIEW REPORT ICON BUTTON */}
                             <button
                               type="button"
                               onClick={() => {
@@ -1755,33 +1822,12 @@ export default function App() {
                                 });
                                 navigateToPage('dual-report');
                               }}
-                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs tracking-wider uppercase shadow cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                              className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold tracking-wider uppercase cursor-pointer inline-flex items-center gap-1 transition-all"
+                              title="View & Print Official Report"
                             >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>OPEN</span>
+                              <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="hidden sm:inline text-[11px]">VIEW</span>
                             </button>
-
-                            {!isReportLocked(r.createdAt) ? (
-                              <button
-                                type="button"
-                                onClick={() => handleEditSavedFlight(r)}
-                                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
-                                title={`Editable within 60 mins from generation (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`}
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                                <span>EDIT</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled
-                                className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-500 border border-slate-700 font-bold text-xs tracking-wider uppercase cursor-not-allowed inline-flex items-center gap-1.5 opacity-60"
-                                title="Edit locked (60 minutes passed since generation)"
-                              >
-                                <Lock className="w-3.5 h-3.5" />
-                                <span>LOCKED</span>
-                              </button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -3048,6 +3094,48 @@ export default function App() {
               >
                 <Copy className="w-3.5 h-3.5" />
                 <span>COPY TEXT</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const targetData =
+                    isReadOnlySavedReport && viewedSavedReport
+                      ? viewedSavedReport.formData
+                      : formData;
+                  setFormData(targetData);
+                  const cleanNum = (targetData.flightNoSuffix || '').replace(/\D/g, '');
+                  const num = parseInt(cleanNum, 10);
+                  const intlAirports = [
+                    'DXB',
+                    'SHJ',
+                    'AUH',
+                    'RUH',
+                    'JED',
+                    'MLE',
+                    'BKK',
+                    'MCT',
+                    'DOH',
+                    'CCU',
+                    'MAA',
+                    'CAN',
+                    'SIN',
+                    'KUL',
+                  ];
+                  const isIntl =
+                    (!isNaN(num) && num >= 200) ||
+                    intlAirports.some((code) => (targetData.route || '').includes(code));
+                  const targetPage: PageMode = isIntl ? 'data-intl' : 'data-dom';
+                  setReportType(isIntl ? 'intl' : 'dom');
+                  setLastDataPage(targetPage);
+                  setViewedSavedReport(null);
+                  navigateToPage(targetPage);
+                  showToast(`FLIGHT BS-${cleanNum || 'DATA'} LOADED IN DATA ENTRY PAGE`);
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-md uppercase transform active:scale-95"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>EDIT FLIGHT DATA</span>
               </button>
 
               <button
