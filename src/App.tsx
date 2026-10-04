@@ -18,6 +18,7 @@ import {
   calculateDepartureStatus,
   calculateArrivalStatus,
   calculateGroundTime,
+  parseTimeToMinutes,
   getRegistrationDetails,
   getAircraftDetails,
 } from './data/aviationData';
@@ -897,10 +898,265 @@ export default function App() {
     0
   );
 
-  // Download Station's Saved Flight Data as Excel (.CSV with UTF-8 BOM) with all data
+  // Download Station's Saved Flight Data as Excel
   const handleDownloadStationSavedExcel = () => {
     if (todayStationSavedFlights.length === 0) {
       showToast('NO FLIGHT DATA FOUND TO DOWNLOAD!');
+      return;
+    }
+
+    // OUTSTATION SPECIFIC EXCEL SHEET (Matching Attachment 2 with arrival & departure rearranged and color coded)
+    if (currentStationUpper !== 'DAC') {
+      const formatToHHMM = (val?: string): string => {
+        if (!val) return '--';
+        const clean = val.replace(/\D/g, '');
+        if (clean.length === 4) {
+          return `${clean.slice(0, 2)}:${clean.slice(2, 4)}`;
+        }
+        if (val.includes(':')) return val.trim();
+        return val.trim() || '--';
+      };
+
+      const getTimeDiffAndStatus = (
+        schedStr?: string,
+        actStr?: string
+      ): { diff: number; status: 'ON TIME' | 'EARLY' | 'DELAY'; minsStr: string } => {
+        const sMin = parseTimeToMinutes(schedStr || '');
+        const aMin = parseTimeToMinutes(actStr || '');
+        if (sMin === null || aMin === null) {
+          return { diff: 0, status: 'ON TIME', minsStr: '00' };
+        }
+        let diff = aMin - sMin;
+        if (diff < -720) diff += 1440;
+        else if (diff > 720) diff -= 1440;
+
+        if (diff === 0) {
+          return { diff: 0, status: 'ON TIME', minsStr: '00' };
+        }
+        if (diff > 0) {
+          return { diff, status: 'DELAY', minsStr: String(diff).padStart(2, '0') };
+        }
+        return {
+          diff: Math.abs(diff),
+          status: 'EARLY',
+          minsStr: String(Math.abs(diff)).padStart(2, '0'),
+        };
+      };
+
+      const getGroundTimeFormatted = (ataStr?: string, atdStr?: string): string => {
+        const aMin = parseTimeToMinutes(ataStr || '');
+        const dMin = parseTimeToMinutes(atdStr || '');
+        if (aMin === null || dMin === null) return '--';
+        let diff = dMin - aMin;
+        if (diff < 0) diff += 1440;
+        const hours = Math.floor(diff / 60);
+        const mins = diff % 60;
+        return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+      };
+
+      const getStatusStyle = (status: 'ON TIME' | 'EARLY' | 'DELAY') => {
+        if (status === 'DELAY') {
+          return 'color: #dc2626; background-color: #ffd7d7; font-weight: bold; text-align: center; border: 1px solid #000000;';
+        }
+        if (status === 'EARLY') {
+          return 'color: #16a34a; background-color: #d7ffd7; font-weight: bold; text-align: center; border: 1px solid #000000;';
+        }
+        return 'color: #b45309; background-color: #fff5cc; font-weight: bold; text-align: center; border: 1px solid #000000;';
+      };
+
+      const getRemarksStyle = (status: 'ON TIME' | 'EARLY' | 'DELAY') => {
+        if (status === 'DELAY') {
+          return 'color: #dc2626; font-weight: bold; text-align: center; border: 1px solid #000000;';
+        }
+        if (status === 'EARLY') {
+          return 'color: #16a34a; font-weight: bold; text-align: center; border: 1px solid #000000;';
+        }
+        return 'color: #b45309; font-weight: bold; text-align: center; border: 1px solid #000000;';
+      };
+
+      const rawFlightDate = todayStationSavedFlights[0]?.date || todayIsoDate;
+      const parsedDate = new Date(rawFlightDate + 'T00:00:00Z');
+      const formattedDateForHeader = !isNaN(parsedDate.getTime())
+        ? `${String(parsedDate.getUTCDate()).padStart(2, '0')} ${parsedDate
+            .toLocaleString('en-GB', { month: 'long', timeZone: 'UTC' })
+            .toUpperCase()} ${parsedDate.getUTCFullYear()}`
+        : rawFlightDate;
+
+      const rowsHtml = todayStationSavedFlights
+        .map((r) => {
+          const raw = r.rawFormData;
+
+          // Arrival Flight
+          const rawFltDigits = (r.flightNo || '').replace(/\D/g, '');
+          const parsedFltNum = parseInt(rawFltDigits, 10);
+          const autoArrNum =
+            !isNaN(parsedFltNum) && parsedFltNum > 0
+              ? String(parsedFltNum % 2 === 0 ? parsedFltNum - 1 : parsedFltNum)
+              : '';
+          const arvFlt = raw?.arrFlightNo?.trim()
+            ? raw.arrFlightNo.trim().toUpperCase().startsWith('BS-')
+              ? raw.arrFlightNo.trim().toUpperCase()
+              : `BS-${raw.arrFlightNo.trim().toUpperCase()}`
+            : autoArrNum
+            ? `BS-${autoArrNum}`
+            : r.flightNo || 'N/A';
+
+          const staFormatted = formatToHHMM(r.sta || raw?.sta);
+          const ataFormatted = formatToHHMM(
+            r.chocksOn || raw?.chocksOn || r.doorOpen || raw?.doorOpen
+          );
+          const arrCalc = getTimeDiffAndStatus(
+            r.sta || raw?.sta,
+            r.chocksOn || raw?.chocksOn || r.doorOpen || raw?.doorOpen
+          );
+
+          const arrAdultPax = raw?.arrPaxAdult?.trim() || '00';
+          const arrInfantPax = String(parseInt(raw?.arrPaxInfant?.trim() || '0', 10) || 0).padStart(
+            2,
+            '0'
+          );
+          const arvPax = `${arrAdultPax}+${arrInfantPax}`;
+
+          // Departure Flight
+          const depFlt = r.flightNo?.trim()
+            ? r.flightNo.trim().toUpperCase().startsWith('BS-')
+              ? r.flightNo.trim().toUpperCase()
+              : `BS-${r.flightNo.trim().toUpperCase()}`
+            : 'N/A';
+
+          const stdFormatted = formatToHHMM(r.std || raw?.std);
+          const atdFormatted = formatToHHMM(
+            r.chocksOff || raw?.chocksOff || r.airborne || raw?.airborne
+          );
+          const depCalc = getTimeDiffAndStatus(
+            r.std || raw?.std,
+            r.chocksOff || raw?.chocksOff || r.airborne || raw?.airborne
+          );
+
+          const gtFormatted = getGroundTimeFormatted(
+            r.chocksOn || raw?.chocksOn || r.doorOpen || raw?.doorOpen,
+            r.chocksOff || raw?.chocksOff || r.airborne || raw?.airborne
+          );
+
+          const depAdultPax = r.paxTotal || raw?.paxTotal || '00';
+          const depInfantPax = String(parseInt(r.paxInfant || raw?.paxInfant || '0', 10) || 0).padStart(
+            2,
+            '0'
+          );
+          const depPax = `${depAdultPax}+${depInfantPax}`;
+
+          // Departure Remarks
+          let depRemarks = '';
+          if (depCalc.status === 'ON TIME') {
+            depRemarks = 'FLT ON TIME';
+          } else if (depCalc.status === 'EARLY') {
+            depRemarks = `FLT ${String(depCalc.diff).padStart(4, '0')} HRS EARLY DEPARTURE`;
+          } else {
+            const arrLateStr =
+              arrCalc.status === 'DELAY' && arrCalc.diff > 0
+                ? ` DUE TO ${String(arrCalc.diff).padStart(4, '0')} HRS L/A`
+                : '';
+            const reasonStr =
+              !arrLateStr && (r.delayReason || raw?.delayReason)
+                ? ` DUE TO ${(r.delayReason || raw?.delayReason).trim().toUpperCase()}`
+                : '';
+            depRemarks = `FLT ${String(depCalc.diff).padStart(4, '0')} HRS DELAY${arrLateStr || reasonStr}`;
+          }
+
+          const customRemark = (r.remarks || raw?.remarks || '').trim().toUpperCase();
+          if (customRemark && customRemark !== 'NIL' && customRemark !== depRemarks) {
+            depRemarks = `${depRemarks} - ${customRemark}`;
+          }
+
+          return `
+            <tr style="height: 25px;">
+              <td style="border: 1px solid #000000; text-align: center; font-weight: bold; mso-number-format:'\\@';">${arvFlt}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${staFormatted}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${ataFormatted}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${arrCalc.minsStr}</td>
+              <td style="${getStatusStyle(arrCalc.status)}">${arrCalc.status}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${arvPax}</td>
+              <td style="border: 1px solid #000000; text-align: center; font-weight: bold; mso-number-format:'\\@';">${depFlt}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${stdFormatted}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${atdFormatted}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${depCalc.minsStr}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${gtFormatted}</td>
+              <td style="${getStatusStyle(depCalc.status)}">${depCalc.status}</td>
+              <td style="border: 1px solid #000000; text-align: center; mso-number-format:'\\@';">${depPax}</td>
+              <td style="${getRemarksStyle(depCalc.status)}">${depRemarks}</td>
+            </tr>
+          `;
+        })
+        .join('');
+
+      const excelHtml = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+          <!--[if gte mso 9]>
+          <xml>
+            <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                  <x:Name>Flight Status</x:Name>
+                  <x:WorksheetOptions>
+                    <x:DisplayGridlines/>
+                  </x:WorksheetOptions>
+                </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+          </xml>
+          <![endif]-->
+          <style>
+            table { border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
+            th { border: 1px solid #000000; text-align: center; vertical-align: middle; }
+            td { border: 1px solid #000000; vertical-align: middle; }
+          </style>
+        </head>
+        <body>
+          <table border="1">
+            <tr>
+              <td colspan="14" style="font-size: 16pt; font-weight: bold; text-align: center; height: 38px; border: none;">
+                Flight Status ${formattedDateForHeader}
+              </td>
+            </tr>
+            <tr>
+              <td colspan="14" style="font-size: 13pt; font-weight: bold; text-align: center; background-color: #1e4b7a; color: #ffffff; height: 32px; border: 1px solid #1e4b7a;">
+                US-Bangla Airlines
+              </td>
+            </tr>
+            <tr style="background-color: #3d3d3d; color: #ffffff; font-weight: bold; text-align: center; height: 30px;">
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 90px;">Flight No</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 70px;">STA</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 70px;">ATA</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 70px;">Minutes</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 85px;">Status</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 80px;">PAX</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 90px;">Flight No</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 70px;">STD</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 70px;">ATD</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 70px;">Minutes</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 70px;">GT</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 85px;">Status</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 80px;">PAX</th>
+              <th style="background-color: #3d3d3d; color: #ffffff; border: 1px solid #000000; width: 400px;">REMARKS</th>
+            </tr>
+            ${rowsHtml}
+          </table>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Flight_Status_${currentStationUpper}_${todayLocalDate}.xls`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('OUTSTATION FLIGHT STATUS EXCEL DOWNLOADED SUCCESSFULLY!');
       return;
     }
 
