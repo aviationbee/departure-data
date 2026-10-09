@@ -61,7 +61,7 @@ const STATION_ADMIN_PASSWORDS: Record<string, string> = {
   ZYL: 'zyl542',
 };
 
-const SUPER_ADMIN_PASSWORD = '11126';
+const SUPER_ADMIN_PASSWORD = 'usba0088';
 
 export const AdminModule: React.FC<Props> = ({
   currentPage,
@@ -135,8 +135,8 @@ export const AdminModule: React.FC<Props> = ({
       return;
     }
 
-    // 1. Check Super Admin Password (11126)
-    if (rawPass === SUPER_ADMIN_PASSWORD) {
+    // 1. Check Super Admin Password (usba0088)
+    if (rawPass.toLowerCase() === SUPER_ADMIN_PASSWORD.toLowerCase()) {
       setAdminRole('super');
       setAuthorizedStation('ALL');
       setSelectedStationFilter('ALL');
