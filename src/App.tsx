@@ -27,6 +27,7 @@ import { DepartureReportTable } from './components/DepartureReportTable';
 import { ArrivalReportTable } from './components/ArrivalReportTable';
 import { DeparturePhotoCard } from './components/DeparturePhotoCard';
 import { MassFormModule } from './components/MassFormModule';
+import { LoadControlModule } from './components/LoadControlModule';
 import { AdminModule } from './components/AdminModule';
 import {
   saveFlightReportToCloud,
@@ -63,6 +64,7 @@ import {
   Eye,
   Download,
   Edit3,
+  Sliders,
 } from 'lucide-react';
 
 const STATION_OPTIONS = [
@@ -1599,6 +1601,14 @@ export default function App() {
               >
                 <FileText className="w-5 h-5 text-purple-200" />
                 <span>MASS FORM</span>
+              </button>
+
+              <button
+                onClick={() => navigateToPage('load-control')}
+                className="py-4 px-6 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-700 hover:from-cyan-500 hover:to-teal-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-cyan-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-cyan-400/40 flex items-center justify-center gap-3 cursor-pointer uppercase"
+              >
+                <Sliders className="w-5 h-5 text-cyan-200" />
+                <span>LOAD CONTROL</span>
               </button>
 
               <button
@@ -3284,6 +3294,16 @@ export default function App() {
           onDashboard={() => navigateToPage('welcome')}
           onLogout={handleLogout}
           userInfo={userInfo}
+          showToast={showToast}
+        />
+      )}
+
+      {/* ================= LOAD CONTROL MODULE ================= */}
+      {currentPage === 'load-control' && (
+        <LoadControlModule
+          userInfo={userInfo}
+          onBackToDashboard={() => navigateToPage('welcome')}
+          onGoToSavedFlights={() => navigateToPage('saved-flights')}
           showToast={showToast}
         />
       )}

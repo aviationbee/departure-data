@@ -111,5 +111,6 @@ export type PageMode =
   | 'admin-dashboard'
   | 'admin-saved-flight'
   | 'admin-saved-maas'
-  | 'admin-logs';
+  | 'admin-logs'
+  | 'load-control';
 
