@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserInfo, FlightFormData } from '../types';
-import { saveFlightReportToCloud, logUserActivity } from '../firebase';
+import { findRouteByFlightNo } from '../data/aviationData';
+import {
+  saveFlightReportToCloud,
+  deleteFlightReportFromCloud,
+  logUserActivity,
+  StoredFlightReport,
+} from '../firebase';
 import {
   ArrowLeft,
   Navigation,
@@ -12,6 +18,7 @@ import {
   Sliders,
   CheckCircle,
   FolderOpen,
+  Edit3,
 } from 'lucide-react';
 
 interface Props {
@@ -19,6 +26,8 @@ interface Props {
   onBackToDashboard: () => void;
   onGoToSavedFlights: () => void;
   showToast: (msg: string) => void;
+  editReport?: StoredFlightReport | null;
+  onClearEditReport?: () => void;
 }
 
 const ROUTE_MAP: Record<string, number[]> = {
@@ -44,6 +53,40 @@ const ROUTE_MAP: Record<string, number[]> = {
   'DAC-RUH': [381, 383],
   'DAC-MLE': [337, 339],
 };
+
+export function getRouteForFlightNo(flightNoStr: string, station?: string): string {
+  const cleanNum = flightNoStr.replace(/\D/g, '');
+  const num = parseInt(cleanNum, 10);
+  if (isNaN(num)) return '';
+
+  let standardRoute = '';
+  for (const [rKey, nums] of Object.entries(ROUTE_MAP)) {
+    if (nums.includes(num)) {
+      standardRoute = rKey;
+      break;
+    }
+  }
+
+  if (!standardRoute) {
+    standardRoute = findRouteByFlightNo(cleanNum);
+  }
+
+  if (!standardRoute) return '';
+
+  const parts = standardRoute.split('-').map((s) => s.trim().toUpperCase());
+  const origin = parts[0];
+  const dest = parts.length > 1 ? parts[1] : parts[0];
+  const userStn = (station || 'DAC').trim().toUpperCase() || 'DAC';
+
+  // If user station is the destination of a domestic flight from DAC (e.g. flight 141 DAC-CXB for officer at CXB),
+  // retain DAC-CXB so inbound domestic flight stays accurate
+  if (userStn === dest && origin === 'DAC') {
+    return standardRoute;
+  }
+
+  // Otherwise, route origin is the officer's station (e.g. CXB-DXB, CXB-BKK, CGP-CCU, DAC-DXB)
+  return `${userStn}-${dest}`;
+}
 
 const AC_TYPE_MAP = {
   atr: ['AKG', 'AKK', 'AKH', 'AKI', 'AKJ', 'AKL', 'AKM', 'AKO', 'AKP'],
@@ -215,16 +258,115 @@ const INITIAL_LDM_DATA: LdmFormData = {
   remarks: '',
 };
 
+export function reconstructLdmFormDataFromStoredReport(r: StoredFlightReport): LdmFormData {
+  const raw = r.rawFormData;
+  const ldm = (raw as any)?.ldmRawData || {};
+
+  return {
+    date: ldm.date || raw?.date || r.date || new Date().toISOString().split('T')[0],
+    flightNoSuffix: (ldm.flightNoSuffix || raw?.flightNoSuffix || r.flightNo || '').replace(/^BS-/i, '').trim(),
+    route: ldm.route || raw?.route || r.route || '',
+    acRegSuffix: (ldm.acRegSuffix || raw?.acRegSuffix || r.acReg || '').replace(/^(S2-|HS-|PK-)/i, '').trim(),
+    acType: ldm.acType || raw?.acType || r.acType || '',
+    captain: ldm.captain || raw?.captain || r.captain || '',
+    configure: ldm.configure || raw?.configure || r.configure || '',
+    std: ldm.std || raw?.std || r.std || '',
+    doorClosed: ldm.doorClosed || raw?.doorClosed || r.doorClosed || '',
+    chocksOff: ldm.chocksOff || raw?.chocksOff || r.chocksOff || '',
+    airborne: ldm.airborne || raw?.airborne || r.airborne || '',
+    departureStatus: ldm.departureStatus || raw?.departureStatus || r.departureStatus || 'ON TIME',
+    boardingGate: ldm.boardingGate || (raw as any)?.boardingGate || '',
+    docIn: ldm.docIn || (raw as any)?.docIn || 'N/A',
+    docOut: ldm.docOut || (raw as any)?.docOut || 'N/A',
+    fuelUplift: ldm.fuelUplift || raw?.fuelUplift || r.fuelUplift || '',
+    paxMale: ldm.paxMale || raw?.paxMale || r.paxMale || '',
+    paxFemale: ldm.paxFemale || raw?.paxFemale || r.paxFemale || '',
+    paxChild: ldm.paxChild || raw?.paxChild || r.paxChild || '',
+    paxInfant: ldm.paxInfant || raw?.paxInfant || r.paxInfant || '',
+    paxTotal: ldm.paxTotal || raw?.paxTotal || r.paxTotal || '',
+    baggageWeight: ldm.baggageWeight || raw?.baggageWeight || r.baggageWeight || '',
+    baggagePcs: ldm.baggagePcs || raw?.baggagePcs || r.baggagePcs || '',
+    baggageComNo: ldm.baggageComNo || raw?.baggageComNo || '',
+    cargoWeight: ldm.cargoWeight || raw?.cargoWeight || r.cargoWeight || '',
+    cargoPcs: ldm.cargoPcs || raw?.cargoPcs || r.cargoPcs || '',
+    cargoComNo: ldm.cargoComNo || raw?.cargoComNo || '',
+    crewBagPcs: ldm.crewBagPcs || raw?.crewBagPcs || '',
+    crewBagComNo: ldm.crewBagComNo || raw?.crewBagComNo || '',
+    totalWeight: ldm.totalWeight || (raw as any)?.totalWeight || '',
+    distB1: ldm.distB1 || raw?.dist?.b1 || '',
+    distB2: ldm.distB2 || raw?.dist?.b2 || '',
+    distB3: ldm.distB3 || raw?.dist?.b3 || '',
+    distB4: ldm.distB4 || raw?.dist?.b4 || '',
+    distA1: ldm.distA1 || raw?.dist?.a1 || '',
+    distA2: ldm.distA2 || raw?.dist?.a2 || '',
+    distA3: ldm.distA3 || raw?.dist?.a3 || '',
+    distA4: ldm.distA4 || raw?.dist?.a4 || '',
+    distA5: ldm.distA5 || raw?.dist?.a5 || '',
+    distAtrFwr: ldm.distAtrFwr || raw?.dist?.atrFwr || '',
+    distAtrFwl: ldm.distAtrFwl || raw?.dist?.atrFwl || '',
+    distAtrAft: ldm.distAtrAft || raw?.dist?.atrAft || '',
+    status: ldm.status || (raw as any)?.status || '',
+    mail: ldm.mail || raw?.mail || r.mail || '',
+    counterNoshow: ldm.counterNoshow || raw?.counterNoshow || r.counterNoshow || '',
+    gateNoShow: ldm.gateNoShow || raw?.gateNoShow || r.gateNoShow || '',
+    selfOffload: ldm.selfOffload || raw?.selfOffload || r.selfOffload || '',
+    refused: ldm.refused || raw?.refused || '',
+    immigrationOff: ldm.immigrationOff || raw?.immigrationOff || '',
+    immigrationNotFace: ldm.immigrationNotFace || raw?.immigrationNotFace || '',
+    customOff: ldm.customOff || raw?.customOff || '',
+    maas: ldm.maas || raw?.maas || r.maas || '',
+    umPax: ldm.umPax || raw?.umPax || r.umPax || '',
+    wchrFig: ldm.wchrFig || raw?.wchrFig || r.wchrFig || '',
+    wchrSeat: ldm.wchrSeat || raw?.wchrSeat || r.wchrSeat || '',
+    wchcFig: ldm.wchcFig || raw?.wchcFig || r.wchcFig || '',
+    wchcSeat: ldm.wchcSeat || raw?.wchcSeat || r.wchcSeat || '',
+    loadingStuff: ldm.loadingStuff || raw?.loadingStuff || r.rampOfficer || '',
+    loadController: ldm.loadController || raw?.loadController || r.loadController || '',
+    paxHandling: ldm.paxHandling || raw?.paxHandling || r.paxHandling || '',
+    remarks: ldm.remarks || raw?.remarks || r.remarks || '',
+  };
+}
+
 export const LoadControlModule: React.FC<Props> = ({
   userInfo,
   onBackToDashboard,
   onGoToSavedFlights,
   showToast,
+  editReport,
+  onClearEditReport,
 }) => {
   const [formData, setFormData] = useState<LdmFormData>(INITIAL_LDM_DATA);
   const [viewMode, setViewMode] = useState<'input' | 'dual-report'>('input');
   const [departureMessageHtml, setDepartureMessageHtml] = useState<string>('');
   const [ldmReportText, setLdmReportText] = useState<string>('');
+  const [editingReportInfo, setEditingReportInfo] = useState<{
+    id: string;
+    createdAt: string;
+  } | null>(null);
+
+  // Load saved flight data for editing when editReport prop is provided
+  useEffect(() => {
+    if (editReport) {
+      const loadedLdm = reconstructLdmFormDataFromStoredReport(editReport);
+      setFormData(loadedLdm);
+      setEditingReportInfo({
+        id: editReport.id,
+        createdAt: editReport.createdAt,
+      });
+      setViewMode('input');
+      showToast(`FLIGHT ${editReport.flightNo || 'DATA'} LOADED IN LOAD CONTROL`);
+    }
+  }, [editReport]);
+
+  // Auto-sync route whenever user station or flightNoSuffix is loaded
+  useEffect(() => {
+    if (formData.flightNoSuffix && (!formData.route || (userInfo.stationName && userInfo.stationName !== 'DAC' && formData.route.startsWith('DAC-')))) {
+      const autoRoute = getRouteForFlightNo(formData.flightNoSuffix, userInfo.stationName);
+      if (autoRoute && autoRoute !== formData.route) {
+        setFormData((prev) => ({ ...prev, route: autoRoute }));
+      }
+    }
+  }, [userInfo.stationName, formData.flightNoSuffix]);
 
   // Typewriter text state
   const [typedTitle, setTypedTitle] = useState('');
@@ -339,23 +481,14 @@ export const LoadControlModule: React.FC<Props> = ({
     return 'ON TIME';
   };
 
-  // Handle Flight No change -> auto lookup Route
+  // Handle Flight No change -> auto lookup Route based on officer's station (e.g. CXB-DXB, DAC-DXB, CXB-BKK, CGP-CCU)
   const handleFlightNoChange = (val: string) => {
     const cleanNum = val.replace(/\D/g, '');
-    const num = parseInt(cleanNum, 10);
-    let matchedRoute = '';
-    if (!isNaN(num)) {
-      for (const [rKey, nums] of Object.entries(ROUTE_MAP)) {
-        if (nums.includes(num)) {
-          matchedRoute = rKey;
-          break;
-        }
-      }
-    }
+    const autoRoute = getRouteForFlightNo(cleanNum, userInfo.stationName);
     setFormData((prev) => ({
       ...prev,
       flightNoSuffix: cleanNum,
-      route: prev.route ? prev.route : matchedRoute,
+      route: autoRoute || (cleanNum ? prev.route : ''),
     }));
   };
 
@@ -821,16 +954,40 @@ STATION: ${userStn}`;
         atrFwl: formData.distAtrFwl,
         atrAft: formData.distAtrAft,
       },
+      boardingGate: formData.boardingGate,
+      docIn: formData.docIn,
+      docOut: formData.docOut,
+      status: formData.status,
+      totalWeight: formData.totalWeight,
+      ldmRawData: formData,
     };
 
+    const originalCreatedAt = editingReportInfo?.createdAt;
     try {
-      await saveFlightReportToCloud(flightPayload, userInfo);
+      await saveFlightReportToCloud(flightPayload, userInfo, originalCreatedAt);
+
+      // If flight number or date changed during edit, clean up old docId to avoid duplicates
+      const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
+      const date = formData.date || new Date().toISOString().split('T')[0];
+      const flightNo = `BS-${(formData.flightNoSuffix || '000').trim().toUpperCase()}`;
+      const newDocId = `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}`;
+
+      if (editingReportInfo?.id && editingReportInfo.id !== newDocId) {
+        await deleteFlightReportFromCloud({ id: editingReportInfo.id } as StoredFlightReport, userInfo);
+      }
+
       await logUserActivity(
-        'LOAD CONTROL REPORT GENERATED',
-        `Generated Load Control & LDM for BS-${formData.flightNoSuffix} (${formData.route})`,
+        editingReportInfo ? 'LOAD CONTROL REPORT EDITED' : 'LOAD CONTROL REPORT GENERATED',
+        `${editingReportInfo ? 'Updated & saved' : 'Generated'} Load Control & LDM for BS-${formData.flightNoSuffix} (${formData.route})`,
         userInfo
       );
-      showToast('LOAD CONTROL REPORT & LDM GENERATED & SAVED IN CLOUD DATA STORE!');
+      showToast(
+        editingReportInfo
+          ? 'LOAD CONTROL REPORT UPDATED & SAVED IN CLOUD DATA STORE!'
+          : 'LOAD CONTROL REPORT & LDM GENERATED & SAVED IN CLOUD DATA STORE!'
+      );
+      setEditingReportInfo(null);
+      onClearEditReport?.();
     } catch (err) {
       console.warn('Error saving load control report:', err);
       showToast('LOAD CONTROL REPORT & LDM GENERATED!');
@@ -842,6 +999,8 @@ STATION: ${userStn}`;
       ...INITIAL_LDM_DATA,
       date: new Date().toISOString().split('T')[0],
     });
+    setEditingReportInfo(null);
+    onClearEditReport?.();
     setViewMode('input');
     showToast('NEW REPORT READY');
   };
@@ -1028,6 +1187,25 @@ STATION: ${userStn}`;
             </div>
           </div>
 
+          {/* Editing Mode Banner */}
+          {editingReportInfo && (
+            <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-600/10 to-slate-900 border border-amber-400/60 shadow-[0_0_20px_rgba(245,158,11,0.2)] flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5 text-amber-300 font-bold uppercase tracking-wider">
+                <Edit3 className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span>
+                  EDITING SAVED FLIGHT BS-{formData.flightNoSuffix || 'DATA'} &bull; EDIT ANY FIELDS &amp; CLICK &ldquo;UPDATE &amp; GENERATE FINAL REPORT&rdquo; TO SAVE UPDATES IN DATA SERVER
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white border border-amber-500/50 font-bold text-xs uppercase cursor-pointer transition-all"
+              >
+                CANCEL / NEW FORM
+              </button>
+            </div>
+          )}
+
           {/* Form Container */}
           <form
             onSubmit={(e) => {
@@ -1068,14 +1246,15 @@ STATION: ${userStn}`;
             <div className="flex flex-col">
               <label className="text-xs font-bold text-sky-400 mb-1 tracking-wider flex items-center justify-between">
                 <span>ROUTE</span>
-                <span className="text-[10px] text-amber-400 font-mono font-bold tracking-normal uppercase">(EDITABLE)</span>
+                <span className="text-[10px] text-cyan-400 font-mono font-bold tracking-normal uppercase">(READ ONLY)</span>
               </label>
               <input
                 type="text"
-                placeholder="E.G., CGP-MCT, DAC-SIN"
+                readOnly
+                placeholder="AUTO GENERATED"
                 value={formData.route}
-                onChange={(e) => setFormData({ ...formData, route: e.target.value.toUpperCase() })}
-                className="p-2 rounded bg-[#060d1a]/90 border border-cyan-900/80 text-[#00f0ff] font-bold text-sm focus:outline-none focus:border-cyan-400"
+                className="p-2 rounded bg-[#060d1a]/90 border border-cyan-900/80 text-[#00f0ff] font-bold text-sm focus:outline-none cursor-not-allowed select-all"
+                title="Route is auto-generated based on flight number and station (Read Only)"
               />
             </div>
 
@@ -1839,7 +2018,9 @@ STATION: ${userStn}`;
                 className="w-full sm:w-auto px-10 py-3.5 rounded-lg bg-[#00f0ff] hover:bg-[#38bdf8] text-[#060d1a] font-black text-sm md:text-base tracking-widest shadow-[0_0_20px_rgba(0,240,255,0.5)] hover:shadow-[0_0_30px_rgba(0,240,255,0.8)] cursor-pointer transition-all flex items-center justify-center gap-2"
               >
                 <Plane className="w-5 h-5 text-black" />
-                <span>GENERATE FINAL REPORT</span>
+                <span>
+                  {editingReportInfo ? 'UPDATE & GENERATE FINAL REPORT' : 'GENERATE FINAL REPORT'}
+                </span>
               </button>
             </div>
           </form>

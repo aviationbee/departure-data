@@ -254,6 +254,8 @@ export default function App() {
     id: string;
     createdAt: string;
   } | null>(null);
+  const [savedFlightsSource, setSavedFlightsSource] = useState<'standard' | 'load-control'>('standard');
+  const [loadControlEditReport, setLoadControlEditReport] = useState<StoredFlightReport | null>(null);
   const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
   });
@@ -1150,10 +1152,9 @@ export default function App() {
               arrCalc.status === 'DELAY' && arrCalc.diff > 0
                 ? ` DUE TO ${String(arrCalc.diff).padStart(4, '0')} HRS L/A`
                 : '';
+            const delayReasonVal = (r.delayReason || raw?.delayReason || '').trim().toUpperCase();
             const reasonStr =
-              !arrLateStr && (r.delayReason || raw?.delayReason)
-                ? ` DUE TO ${(r.delayReason || raw?.delayReason).trim().toUpperCase()}`
-                : '';
+              !arrLateStr && delayReasonVal ? ` DUE TO ${delayReasonVal}` : '';
             depRemarks = `FLT ${String(depCalc.diff).padStart(4, '0')} HRS DELAY${arrLateStr || reasonStr}`;
           }
 
@@ -1588,7 +1589,10 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => navigateToPage('saved-flights')}
+                onClick={() => {
+                  setSavedFlightsSource('standard');
+                  navigateToPage('saved-flights');
+                }}
                 className="py-4 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-emerald-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-emerald-400/30 flex items-center justify-center gap-3 cursor-pointer uppercase"
               >
                 <FolderOpen className="w-5 h-5 text-emerald-200" />
@@ -1637,16 +1641,27 @@ export default function App() {
           <div className="max-w-6xl w-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 shadow-2xl rounded-2xl p-5 md:p-8 my-auto text-slate-200">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-5 mb-6 border-b border-slate-800 gap-4">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-black tracking-wider uppercase mb-2">
-                  <FolderOpen className="w-3.5 h-3.5" />
-                  <span>STATION: {currentStationUpper} &bull; TODAY&apos;S GENERATED FLIGHT REPORTS</span>
-                </div>
+                {savedFlightsSource === 'load-control' ? (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-xs font-black tracking-wider uppercase mb-2">
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>FOR LOAD CONTROLLER &bull; CLICK &ldquo;EDIT&rdquo; TO LOAD INTO LOAD CONTROL</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-black tracking-wider uppercase mb-2">
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>STATION: {currentStationUpper} &bull; TODAY&apos;S GENERATED FLIGHT REPORTS</span>
+                  </div>
+                )}
                 <h1 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
                   <Plane className="w-6 h-6 text-amber-400" />
                   <span>SAVED FLIGHT DATA ({todayStationSavedFlights.length})</span>
                 </h1>
                 <p className="text-xs text-slate-400 font-sans mt-0.5 uppercase tracking-wider">
-                  REAL-TIME TODAY&apos;S FLIGHT LIST FOR STATION {currentStationUpper} &mdash; CLICK &ldquo;OPEN&rdquo; TO VIEW OR &ldquo;EDIT&rdquo; TO MODIFY WITHIN 60 MINS
+                  {savedFlightsSource === 'load-control'
+                    ? "CLICK \u201CEDIT\u201D TO DIRECTLY LOAD SAVED FLIGHT INTO LOAD CONTROL INPUT PAGE"
+                    : "REAL-TIME TODAY'S FLIGHT LIST FOR STATION " +
+                      currentStationUpper +
+                      ' \u2014 CLICK \u201COPEN\u201D TO VIEW OR \u201CEDIT\u201D TO MODIFY WITHIN 60 MINS'}
                 </p>
               </div>
 
@@ -1662,7 +1677,13 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={handlePreviousPage}
+                  onClick={() => {
+                    if (savedFlightsSource === 'load-control') {
+                      navigateToPage('load-control');
+                    } else {
+                      handlePreviousPage();
+                    }
+                  }}
                   className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
@@ -1780,9 +1801,21 @@ export default function App() {
                             {!isReportLocked(r.createdAt) ? (
                               <button
                                 type="button"
-                                onClick={() => handleEditSavedFlight(r)}
+                                onClick={() => {
+                                  if (savedFlightsSource === 'load-control') {
+                                    setLoadControlEditReport(r);
+                                    navigateToPage('load-control');
+                                    showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN LOAD CONTROL`);
+                                  } else {
+                                    handleEditSavedFlight(r);
+                                  }
+                                }}
                                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
-                                title={`Click to edit this flight data in Data Entry page (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`}
+                                title={
+                                  savedFlightsSource === 'load-control'
+                                    ? `Click to load this flight into Load Control input page for editing (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`
+                                    : `Click to edit this flight data in Data Entry page (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`
+                                }
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                                 <span>EDIT</span>
@@ -1791,22 +1824,44 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const confirmForceEdit = window.confirm(
-                                    `FLIGHT ${r.flightNo}: 60 minutes have passed since report generation (LOCKED).\n\nDo you want to load this flight's data into the Data Entry page to modify and re-generate?`
-                                  );
-                                  if (confirmForceEdit) {
-                                    handleForceEditSavedFlight(r);
+                                  if (savedFlightsSource === 'load-control') {
+                                    const confirmForceEdit = window.confirm(
+                                      `FLIGHT ${r.flightNo}: 60 minutes have passed since report generation (LOCKED).\n\nDo you want to load this flight's data into the Load Control page to modify and re-generate?`
+                                    );
+                                    if (confirmForceEdit) {
+                                      setLoadControlEditReport(r);
+                                      navigateToPage('load-control');
+                                      showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN LOAD CONTROL`);
+                                    } else {
+                                      const loadedData = reconstructFormDataFromStoredReport(r);
+                                      setViewedSavedReport({
+                                        formData: loadedData,
+                                        user: {
+                                          userName: r.preparedBy || userInfo.userName,
+                                          usbaId: r.usbaId || userInfo.usbaId,
+                                          stationName: r.station || userInfo.stationName,
+                                        },
+                                      });
+                                      navigateToPage('dual-report');
+                                    }
                                   } else {
-                                    const loadedData = reconstructFormDataFromStoredReport(r);
-                                    setViewedSavedReport({
-                                      formData: loadedData,
-                                      user: {
-                                        userName: r.preparedBy || userInfo.userName,
-                                        usbaId: r.usbaId || userInfo.usbaId,
-                                        stationName: r.station || userInfo.stationName,
-                                      },
-                                    });
-                                    navigateToPage('dual-report');
+                                    const confirmForceEdit = window.confirm(
+                                      `FLIGHT ${r.flightNo}: 60 minutes have passed since report generation (LOCKED).\n\nDo you want to load this flight's data into the Data Entry page to modify and re-generate?`
+                                    );
+                                    if (confirmForceEdit) {
+                                      handleForceEditSavedFlight(r);
+                                    } else {
+                                      const loadedData = reconstructFormDataFromStoredReport(r);
+                                      setViewedSavedReport({
+                                        formData: loadedData,
+                                        user: {
+                                          userName: r.preparedBy || userInfo.userName,
+                                          usbaId: r.usbaId || userInfo.usbaId,
+                                          stationName: r.station || userInfo.stationName,
+                                        },
+                                      });
+                                      navigateToPage('dual-report');
+                                    }
                                   }
                                 }}
                                 className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400/90 border border-slate-700 font-bold text-xs tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-sm"
@@ -3302,8 +3357,16 @@ export default function App() {
       {currentPage === 'load-control' && (
         <LoadControlModule
           userInfo={userInfo}
-          onBackToDashboard={() => navigateToPage('welcome')}
-          onGoToSavedFlights={() => navigateToPage('saved-flights')}
+          onBackToDashboard={() => {
+            setLoadControlEditReport(null);
+            navigateToPage('welcome');
+          }}
+          onGoToSavedFlights={() => {
+            setSavedFlightsSource('load-control');
+            navigateToPage('saved-flights');
+          }}
+          editReport={loadControlEditReport}
+          onClearEditReport={() => setLoadControlEditReport(null)}
           showToast={showToast}
         />
       )}

@@ -80,6 +80,12 @@ export interface FlightFormData {
   noshowPnr?: string;
   remarks: string;
   flstRawMessage?: string;
+  boardingGate?: string;
+  docIn?: string;
+  docOut?: string;
+  status?: string;
+  totalWeight?: string;
+  ldmRawData?: any;
   dist?: {
     b1?: string;
     b2?: string;
