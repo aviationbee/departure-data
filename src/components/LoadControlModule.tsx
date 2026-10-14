@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserInfo, FlightFormData } from '../types';
-import { findRouteByFlightNo } from '../data/aviationData';
+import { findRouteByFlightNo, ROUTE_MAP as AVIATION_ROUTE_MAP, AIRPORT_NAMES } from '../data/aviationData';
 import {
   saveFlightReportToCloud,
   deleteFlightReportFromCloud,
@@ -19,7 +19,33 @@ import {
   CheckCircle,
   FolderOpen,
   Edit3,
+  MapPin,
 } from 'lucide-react';
+
+export const STATION_OPTIONS = [
+  { code: 'DAC', name: 'DAC - DHAKA' },
+  { code: 'SPD', name: 'SPD - SAIDPUR' },
+  { code: 'CXB', name: "CXB - COX'S BAZAR" },
+  { code: 'CGP', name: 'CGP - CHATTOGRAM' },
+  { code: 'RJH', name: 'RJH - RAJSHAHI' },
+  { code: 'JSR', name: 'JSR - JASHORE' },
+  { code: 'BZL', name: 'BZL - BARISHAL' },
+  { code: 'ZYL', name: 'ZYL - SYLHET' },
+];
+
+export function extractStationCode(stn?: string): string {
+  if (!stn) return 'DAC';
+  const clean = stn.trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(clean)) return clean;
+  const match = clean.match(/^([A-Z]{3})\b/);
+  if (match) return match[1];
+  for (const [code, name] of Object.entries(AIRPORT_NAMES)) {
+    if (clean.includes(code) || clean.includes(name.toUpperCase())) {
+      return code;
+    }
+  }
+  return clean.slice(0, 3) || 'DAC';
+}
 
 interface Props {
   userInfo: UserInfo;
@@ -27,7 +53,9 @@ interface Props {
   onGoToSavedFlights: () => void;
   showToast: (msg: string) => void;
   editReport?: StoredFlightReport | null;
+  initialViewMode?: 'input' | 'dual-report';
   onClearEditReport?: () => void;
+  onUpdateStation?: (stationCode: string) => void;
 }
 
 const ROUTE_MAP: Record<string, number[]> = {
@@ -41,10 +69,10 @@ const ROUTE_MAP: Record<string, number[]> = {
   'DAC-BZL': [171, 173, 175, 177, 179],
   'DAC-SPD': [181, 183, 185, 187, 189, 191, 193, 195, 197, 199],
   'DAC-MAA': [205, 207, 209],
-  'DAC-BKK': [217],
+  'DAC-BKK': [217, 219],
   'DAC-KUL': [315, 317, 319],
-  'DAC-AUH': [349],
-  'DAC-DOH': [333],
+  'DAC-AUH': [349, 351],
+  'DAC-DOH': [333, 335],
   'DAC-MCT': [321, 323],
   'DAC-SHJ': [345, 347],
   'DAC-CAN': [325, 327],
@@ -68,6 +96,15 @@ export function getRouteForFlightNo(flightNoStr: string, station?: string): stri
   }
 
   if (!standardRoute) {
+    for (const [rKey, nums] of Object.entries(AVIATION_ROUTE_MAP)) {
+      if (nums.includes(num)) {
+        standardRoute = rKey;
+        break;
+      }
+    }
+  }
+
+  if (!standardRoute) {
     standardRoute = findRouteByFlightNo(cleanNum);
   }
 
@@ -76,7 +113,7 @@ export function getRouteForFlightNo(flightNoStr: string, station?: string): stri
   const parts = standardRoute.split('-').map((s) => s.trim().toUpperCase());
   const origin = parts[0];
   const dest = parts.length > 1 ? parts[1] : parts[0];
-  const userStn = (station || 'DAC').trim().toUpperCase() || 'DAC';
+  const userStn = extractStationCode(station);
 
   // If user station is the destination of a domestic flight from DAC (e.g. flight 141 DAC-CXB for officer at CXB),
   // retain DAC-CXB so inbound domestic flight stays accurate
@@ -84,7 +121,7 @@ export function getRouteForFlightNo(flightNoStr: string, station?: string): stri
     return standardRoute;
   }
 
-  // Otherwise, route origin is the officer's station (e.g. CXB-DXB, CXB-BKK, CGP-CCU, DAC-DXB)
+  // Otherwise, route departure station is the officer's active station (e.g. SPD-DXB, CXB-DXB, CGP-CCU, DAC-DXB)
   return `${userStn}-${dest}`;
 }
 
@@ -327,13 +364,88 @@ export function reconstructLdmFormDataFromStoredReport(r: StoredFlightReport): L
   };
 }
 
+export function buildDepartureMessage(d: LdmFormData, officerUser: UserInfo): string {
+  const cleanRawReg = d.acRegSuffix.toUpperCase().replace(/^(S2-|HS-|PK-)/, '');
+  let finalAcRegDisplay = `S2-${cleanRawReg}`;
+  if (['PKBBG', 'BBG'].includes(cleanRawReg)) finalAcRegDisplay = 'PK-BBG';
+  else if (['PKBBH', 'BBH'].includes(cleanRawReg)) finalAcRegDisplay = 'PK-BBH';
+  else if (['9HSAU', 'SAU'].includes(cleanRawReg)) finalAcRegDisplay = '9H-SAU';
+  else if (['HSSXA', 'SXA'].includes(cleanRawReg)) finalAcRegDisplay = 'HS-SXA';
+
+  const userStn = (officerUser.stationName || 'CGP').trim().toUpperCase();
+
+  return `FLIGHT DEPARTURE MESSAGE
+--------------------------------------
+DATE: ${d.date}
+FLIGHT NO: BS-${d.flightNoSuffix} (${d.route})
+A/C REG: ${finalAcRegDisplay}
+A/C TYPE: ${d.acType}
+CAPTAIN: ${d.captain}
+CONFIGURE: ${d.configure}
+
+FLIGHT OPERATIONS SUMMARY
+--------------------------------------
+STD: ${d.std ? d.std + ' UTC' : 'N/A'}
+DOOR CLOSED: ${d.doorClosed ? d.doorClosed + ' UTC' : 'N/A'}
+CHOCKS OFF: ${d.chocksOff ? d.chocksOff + ' UTC' : 'N/A'}
+AIRBORNE: ${d.airborne ? d.airborne + ' UTC' : 'N/A'}
+DEPARTURE STATUS: ${d.departureStatus}
+BOARDING GATE: ${d.boardingGate || 'N/A'}
+DOC IN: ${d.docIn && d.docIn !== 'N/A' ? d.docIn + ' UTC' : 'N/A'}
+DOC OUT: ${d.docOut && d.docOut !== 'N/A' ? d.docOut + ' UTC' : 'N/A'}
+FUEL UPLIFT: ${d.fuelUplift || '0'} KG
+
+LOAD SUMMARY
+--------------------------------------
+PASSENGERS: AS PER SYSTEM
+BAGGAGE: ${d.baggageWeight || '0'} KG / ${d.baggagePcs || '0'} PCS / COM NO ${d.baggageComNo || 'N/A'}
+CREW BAG: ${d.crewBagPcs || '0'} PCS / COM NO ${d.crewBagComNo || 'N/A'}
+CARGO: ${d.cargoWeight || '0'} KG / ${d.cargoPcs || '0'} PCS / COM NO ${d.cargoComNo || 'N/A'}
+MAIL: ${d.mail || '0'}
+UNDER LOAD: ${d.paxHandling || 'N/A'}
+
+PASSENGER HANDLING DETAILS
+--------------------------------------
+COUNTER NOSHOW: ${d.counterNoshow || '0'}
+GATE NO SHOW: ${d.gateNoShow || '0'}
+SELF OFFLOAD: ${d.selfOffload || '0'}
+REFUSED: ${d.refused || '0'}
+IMMIGRATION OFF: ${d.immigrationOff || '0'}
+IMMIGRATION NOT FACE: ${d.immigrationNotFace || '0'}
+CUSTOM OFF: ${d.customOff || '0'}
+
+SPECIAL HANDLING
+--------------------------------------
+MAAS: ${d.maas || '0'}
+UM PAX: ${d.umPax || '0'}
+WCHR: ${d.wchrFig || '0'} (${d.wchrSeat || 'N/A'})
+WCHC: ${d.wchcFig || '0'} (${d.wchcSeat || 'N/A'})
+
+DUTY PERSONNEL:
+--------------------------------------
+LOADING STUFF / G7: ${d.loadingStuff || 'N/A'}
+LOAD CONTROLLER: ${d.loadController || 'N/A'}
+
+REMARKS:
+--------------------------------------
+${d.remarks || 'NIL'}
+
+--------------------------------------
+PREPARED BY:
+NAME: ${(officerUser.userName || 'SAMPLE').toUpperCase()}
+USBA ID: ${(officerUser.usbaId || '123').toUpperCase()}
+STATION: ${userStn}`;
+}
+
 export const LoadControlModule: React.FC<Props> = ({
   userInfo,
   onBackToDashboard,
   onGoToSavedFlights,
   showToast,
   editReport,
+  initialViewMode = 'input',
   onClearEditReport,
+  onUpdateStation,
 }) => {
   const [formData, setFormData] = useState<LdmFormData>(INITIAL_LDM_DATA);
   const [viewMode, setViewMode] = useState<'input' | 'dual-report'>('input');
@@ -344,7 +456,7 @@ export const LoadControlModule: React.FC<Props> = ({
     createdAt: string;
   } | null>(null);
 
-  // Load saved flight data for editing when editReport prop is provided
+  // Load saved flight data for editing or viewing when editReport prop is provided
   useEffect(() => {
     if (editReport) {
       const loadedLdm = reconstructLdmFormDataFromStoredReport(editReport);
@@ -353,15 +465,52 @@ export const LoadControlModule: React.FC<Props> = ({
         id: editReport.id,
         createdAt: editReport.createdAt,
       });
-      setViewMode('input');
-      showToast(`FLIGHT ${editReport.flightNo || 'DATA'} LOADED IN LOAD CONTROL`);
+
+      const reportStn = extractStationCode(editReport.station || userInfo.stationName);
+      if (editReport.station && onUpdateStation) {
+        onUpdateStation(reportStn);
+      }
+
+      const reportUser: UserInfo = {
+        userName: editReport.preparedBy || userInfo.userName,
+        usbaId: editReport.usbaId || userInfo.usbaId,
+        stationName: reportStn,
+      };
+
+      if (initialViewMode === 'dual-report') {
+        const depMsg = buildDepartureMessage(loadedLdm, reportUser);
+        const ldm = generateLdmForDestination(loadedLdm, reportUser);
+        setDepartureMessageHtml(depMsg);
+        setLdmReportText(ldm);
+        setViewMode('dual-report');
+        showToast(`FLIGHT ${editReport.flightNo || 'FINAL REPORT'} (MESSAGE & LDM) LOADED`);
+      } else {
+        setViewMode('input');
+        showToast(`FLIGHT ${editReport.flightNo || 'DATA'} LOADED FOR EDITING`);
+      }
     }
-  }, [editReport]);
+  }, [editReport, initialViewMode]);
+
+  // Handle station change directly from Load Controller
+  const handleStationChange = (newStn: string) => {
+    const code = extractStationCode(newStn);
+    if (onUpdateStation) {
+      onUpdateStation(code);
+    }
+    if (formData.flightNoSuffix) {
+      const updatedRoute = getRouteForFlightNo(formData.flightNoSuffix, code);
+      if (updatedRoute) {
+        setFormData((prev) => ({ ...prev, route: updatedRoute }));
+      }
+    }
+    showToast(`STATION SWITCHED TO ${code}`);
+  };
 
   // Auto-sync route whenever user station or flightNoSuffix is loaded
   useEffect(() => {
-    if (formData.flightNoSuffix && (!formData.route || (userInfo.stationName && userInfo.stationName !== 'DAC' && formData.route.startsWith('DAC-')))) {
-      const autoRoute = getRouteForFlightNo(formData.flightNoSuffix, userInfo.stationName);
+    if (formData.flightNoSuffix) {
+      const activeStn = extractStationCode(userInfo.stationName);
+      const autoRoute = getRouteForFlightNo(formData.flightNoSuffix, activeStn);
       if (autoRoute && autoRoute !== formData.route) {
         setFormData((prev) => ({ ...prev, route: autoRoute }));
       }
@@ -481,14 +630,15 @@ export const LoadControlModule: React.FC<Props> = ({
     return 'ON TIME';
   };
 
-  // Handle Flight No change -> auto lookup Route based on officer's station (e.g. CXB-DXB, DAC-DXB, CXB-BKK, CGP-CCU)
+  // Handle Flight No change -> auto lookup Route based on officer's station (e.g. SPD-DXB, CXB-DXB, CGP-CCU, DAC-DXB)
   const handleFlightNoChange = (val: string) => {
     const cleanNum = val.replace(/\D/g, '');
-    const autoRoute = getRouteForFlightNo(cleanNum, userInfo.stationName);
+    const activeStn = extractStationCode(userInfo.stationName);
+    const autoRoute = getRouteForFlightNo(cleanNum, activeStn);
     setFormData((prev) => ({
       ...prev,
       flightNoSuffix: cleanNum,
-      route: autoRoute || (cleanNum ? prev.route : ''),
+      route: autoRoute || (cleanNum.length >= 3 ? `${activeStn}-` : ''),
     }));
   };
 
@@ -551,12 +701,13 @@ export const LoadControlModule: React.FC<Props> = ({
   };
 
   // Generate Flight LDM Text according to destination rules
-  const generateLdmForDestination = (d: LdmFormData): string => {
+  const generateLdmForDestination = (d: LdmFormData, officerUser?: UserInfo): string => {
     const routeParts = (d.route || '').split('-').map((s) => s.trim().toUpperCase()).filter(Boolean);
     const dest = routeParts.length > 1 ? routeParts[1] : (routeParts[0] || 'DAC');
     let ldm = '';
-    const userStation = (userInfo.stationName || 'DAC').trim().toUpperCase();
-    const dynamicRegards = `REGARDS,\n______________________________\n${userInfo.userName.toUpperCase()}\nLOAD CONTROL OFFICER II\nUSBA-${userInfo.usbaId.toUpperCase()} II ${userStation} APT II`;
+    const activeUser = officerUser || userInfo;
+    const userStation = (activeUser.stationName || 'DAC').trim().toUpperCase();
+    const dynamicRegards = `REGARDS,\n______________________________\n${(activeUser.userName || 'OFFICER').toUpperCase()}\nLOAD CONTROL OFFICER II\nUSBA-${(activeUser.usbaId || '123').toUpperCase()} II ${userStation} APT II`;
 
     const totalLoad = (parseInt(d.baggageWeight, 10) || 0) + (parseInt(d.cargoWeight, 10) || 0);
     const isAirbus = d.acType.includes('AIRBUS');
@@ -813,77 +964,8 @@ export const LoadControlModule: React.FC<Props> = ({
     }
 
     const cleanRawReg = formData.acRegSuffix.toUpperCase().replace(/^(S2-|HS-|PK-)/, '');
-    let finalAcRegDisplay = `S2-${cleanRawReg}`;
-    if (['PKBBG', 'BBG'].includes(cleanRawReg)) finalAcRegDisplay = 'PK-BBG';
-    else if (['PKBBH', 'BBH'].includes(cleanRawReg)) finalAcRegDisplay = 'PK-BBH';
-    else if (['9HSAU', 'SAU'].includes(cleanRawReg)) finalAcRegDisplay = '9H-SAU';
-    else if (['HSSXA', 'SXA'].includes(cleanRawReg)) finalAcRegDisplay = 'HS-SXA';
-
-    const userStn = (userInfo.stationName || 'CGP').trim().toUpperCase();
-
-    const departureMsg = `FLIGHT DEPARTURE MESSAGE
---------------------------------------
-DATE: ${formData.date}
-FLIGHT NO: BS-${formData.flightNoSuffix} (${formData.route})
-A/C REG: ${finalAcRegDisplay}
-A/C TYPE: ${formData.acType}
-CAPTAIN: ${formData.captain}
-CONFIGURE: ${formData.configure}
-
-FLIGHT OPERATIONS SUMMARY
---------------------------------------
-STD: ${formData.std ? formData.std + ' UTC' : 'N/A'}
-DOOR CLOSED: ${formData.doorClosed ? formData.doorClosed + ' UTC' : 'N/A'}
-CHOCKS OFF: ${formData.chocksOff ? formData.chocksOff + ' UTC' : 'N/A'}
-AIRBORNE: ${formData.airborne ? formData.airborne + ' UTC' : 'N/A'}
-DEPARTURE STATUS: ${formData.departureStatus}
-BOARDING GATE: ${formData.boardingGate || 'N/A'}
-DOC IN: ${formData.docIn && formData.docIn !== 'N/A' ? formData.docIn + ' UTC' : 'N/A'}
-DOC OUT: ${formData.docOut && formData.docOut !== 'N/A' ? formData.docOut + ' UTC' : 'N/A'}
-FUEL UPLIFT: ${formData.fuelUplift || '0'} KG
-
-LOAD SUMMARY
---------------------------------------
-PASSENGERS: AS PER SYSTEM
-BAGGAGE: ${formData.baggageWeight || '0'} KG / ${formData.baggagePcs || '0'} PCS / COM NO ${formData.baggageComNo || 'N/A'}
-CREW BAG: ${formData.crewBagPcs || '0'} PCS / COM NO ${formData.crewBagComNo || 'N/A'}
-CARGO: ${formData.cargoWeight || '0'} KG / ${formData.cargoPcs || '0'} PCS / COM NO ${formData.cargoComNo || 'N/A'}
-MAIL: ${formData.mail || '0'}
-UNDER LOAD: ${formData.paxHandling || 'N/A'}
-
-PASSENGER HANDLING DETAILS
---------------------------------------
-COUNTER NOSHOW: ${formData.counterNoshow || '0'}
-GATE NO SHOW: ${formData.gateNoShow || '0'}
-SELF OFFLOAD: ${formData.selfOffload || '0'}
-REFUSED: ${formData.refused || '0'}
-IMMIGRATION OFF: ${formData.immigrationOff || '0'}
-IMMIGRATION NOT FACE: ${formData.immigrationNotFace || '0'}
-CUSTOM OFF: ${formData.customOff || '0'}
-
-SPECIAL HANDLING
---------------------------------------
-MAAS: ${formData.maas || '0'}
-UM PAX: ${formData.umPax || '0'}
-WCHR: ${formData.wchrFig || '0'} (${formData.wchrSeat || 'N/A'})
-WCHC: ${formData.wchcFig || '0'} (${formData.wchcSeat || 'N/A'})
-
-DUTY PERSONNEL:
---------------------------------------
-LOADING STUFF / G7: ${formData.loadingStuff || 'N/A'}
-LOAD CONTROLLER: ${formData.loadController || 'N/A'}
-
-REMARKS:
---------------------------------------
-${formData.remarks || 'NIL'}
-
---------------------------------------
-PREPARED BY:
-NAME: ${(userInfo.userName || 'SAMPLE').toUpperCase()}
-USBA ID: ${(userInfo.usbaId || '123').toUpperCase()}
-STATION: ${userStn}`;
-
-    const ldmText = generateLdmForDestination(formData);
+    const departureMsg = buildDepartureMessage(formData, userInfo);
+    const ldmText = generateLdmForDestination(formData, userInfo);
 
     setDepartureMessageHtml(departureMsg);
     setLdmReportText(ldmText);
@@ -1166,12 +1248,27 @@ STATION: ${userStn}`;
               </button>
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-400/50 text-[#00f0ff] text-xs font-mono shadow-[0_0_15px_rgba(0,240,255,0.2)]">
-              <span>OFFICER: {userInfo.userName}</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-400/50 text-[#00f0ff] text-xs font-mono shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+              <span>OFFICER: {userInfo.userName || 'OFFICER'}</span>
               <span>&bull;</span>
-              <span>USBA-{userInfo.usbaId}</span>
+              <span>USBA-{userInfo.usbaId || '10245'}</span>
               <span>&bull;</span>
-              <span>STATION: {userInfo.stationName}</span>
+              <span className="flex items-center gap-1.5 font-bold text-amber-300">
+                <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                <span>STATION:</span>
+                <select
+                  value={extractStationCode(userInfo.stationName)}
+                  onChange={(e) => handleStationChange(e.target.value)}
+                  className="bg-slate-900 text-cyan-300 border border-cyan-500/60 rounded px-1.5 py-0.5 text-xs font-bold focus:outline-none focus:border-cyan-300 cursor-pointer"
+                  title="Active station for flight route generation (e.g. SPD, CXB, CGP, DAC)"
+                >
+                  {STATION_OPTIONS.map((st) => (
+                    <option key={st.code} value={st.code} className="bg-slate-900 text-white">
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
+              </span>
             </div>
           </div>
 
@@ -1234,10 +1331,10 @@ STATION: ${userStn}`;
                 </span>
                 <input
                   type="text"
-                  placeholder="XXX"
+                  placeholder="341"
                   value={formData.flightNoSuffix}
                   onChange={(e) => handleFlightNoChange(e.target.value)}
-                  className="w-full p-2 rounded-r bg-[#060d1a]/90 border border-cyan-900/80 text-[#00f0ff] font-bold text-sm focus:outline-none focus:border-cyan-400"
+                  className="w-full p-2 rounded-r bg-[#060d1a]/90 border border-cyan-900/80 text-[#00f0ff] font-bold text-sm focus:outline-none focus:border-cyan-400 font-mono"
                 />
               </div>
             </div>
@@ -1246,16 +1343,25 @@ STATION: ${userStn}`;
             <div className="flex flex-col">
               <label className="text-xs font-bold text-sky-400 mb-1 tracking-wider flex items-center justify-between">
                 <span>ROUTE</span>
-                <span className="text-[10px] text-cyan-400 font-mono font-bold tracking-normal uppercase">(READ ONLY)</span>
+                <span className="text-[10px] text-cyan-400 font-mono font-bold tracking-normal uppercase bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-500/40">
+                  AUTO (READ ONLY)
+                </span>
               </label>
               <input
                 type="text"
                 readOnly
                 placeholder="AUTO GENERATED"
                 value={formData.route}
-                className="p-2 rounded bg-[#060d1a]/90 border border-cyan-900/80 text-[#00f0ff] font-bold text-sm focus:outline-none cursor-not-allowed select-all"
-                title="Route is auto-generated based on flight number and station (Read Only)"
+                className="p-2 rounded bg-[#060d1a]/90 border border-cyan-900/80 text-[#00f0ff] font-bold text-sm focus:outline-none cursor-not-allowed select-all tracking-wider font-mono"
+                title="Route is automatically generated from your station to destination (Read Only)"
               />
+              {formData.route && (
+                <div className="text-[11px] text-emerald-400 font-mono mt-1 flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded px-2 py-0.5 w-fit">
+                  <span>DEP: <strong className="text-amber-300 font-bold">{formData.route.split('-')[0]}</strong></span>
+                  <span>➔</span>
+                  <span>DEST: <strong className="text-cyan-300 font-bold">{formData.route.split('-')[1] || '--'}</strong></span>
+                </div>
+              )}
             </div>
 
             {/* A/C REG */}

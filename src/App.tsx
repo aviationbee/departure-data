@@ -27,7 +27,7 @@ import { DepartureReportTable } from './components/DepartureReportTable';
 import { ArrivalReportTable } from './components/ArrivalReportTable';
 import { DeparturePhotoCard } from './components/DeparturePhotoCard';
 import { MassFormModule } from './components/MassFormModule';
-import { LoadControlModule } from './components/LoadControlModule';
+import { LoadControlModule, extractStationCode } from './components/LoadControlModule';
 import { AdminModule } from './components/AdminModule';
 import {
   saveFlightReportToCloud,
@@ -257,6 +257,7 @@ export default function App() {
   } | null>(null);
   const [savedFlightsSource, setSavedFlightsSource] = useState<'standard' | 'load-control'>('standard');
   const [loadControlEditReport, setLoadControlEditReport] = useState<StoredFlightReport | null>(null);
+  const [loadControlViewMode, setLoadControlViewMode] = useState<'input' | 'dual-report'>('input');
   const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
   });
@@ -960,12 +961,13 @@ export default function App() {
 
   const todayIsoDate = new Date().toISOString().split('T')[0];
   const todayLocalDate = new Date().toLocaleDateString('en-CA');
-  const currentStationUpper = (userInfo.stationName || 'DAC').trim().toUpperCase();
+  const currentStationCode = extractStationCode(userInfo.stationName);
+  const currentStationUpper = currentStationCode;
 
   // All flights generated today for this station (combined: Load Control & Flight Data)
   const allStationTodaySavedFlights = cloudFlightReports.filter((r) => {
-    const rStation = (r.station || 'DAC').trim().toUpperCase();
-    if (rStation !== currentStationUpper) return false;
+    const rStation = extractStationCode(r.station || 'DAC');
+    if (rStation !== currentStationCode) return false;
     const isTodayFlightDate = r.date === todayIsoDate || r.date === todayLocalDate;
     const isCreatedToday =
       r.createdAt &&
@@ -1812,24 +1814,28 @@ export default function App() {
                         <td className="p-3.5 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">
                             {/* ACTION BUTTON: EDIT (OR LOCKED AFTER 60 MINS) */}
-                            {!isReportLocked(r.createdAt) ? (
+                            {/* ACTION BUTTON: EDIT */}
+                            {savedFlightsSource === 'load-control' ? (
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (savedFlightsSource === 'load-control') {
-                                    setLoadControlEditReport(r);
-                                    navigateToPage('load-control');
-                                    showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN LOAD CONTROL`);
-                                  } else {
-                                    handleEditSavedFlight(r);
-                                  }
+                                  setLoadControlEditReport({ ...r });
+                                  setLoadControlViewMode('input');
+                                  navigateToPage('load-control');
+                                  showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN LOAD CONTROL FOR EDITING`);
                                 }}
                                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
-                                title={
-                                  savedFlightsSource === 'load-control'
-                                    ? `Click to load this flight into Load Control input page for editing (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`
-                                    : `Click to edit this flight data in Data Entry page (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`
-                                }
+                                title="Click to load this flight into Load Control input page for editing"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>EDIT</span>
+                              </button>
+                            ) : !isReportLocked(r.createdAt) ? (
+                              <button
+                                type="button"
+                                onClick={() => handleEditSavedFlight(r)}
+                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                                title={`Click to edit this flight data in Data Entry page (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`}
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                                 <span>EDIT</span>
@@ -1838,44 +1844,22 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (savedFlightsSource === 'load-control') {
-                                    const confirmForceEdit = window.confirm(
-                                      `FLIGHT ${r.flightNo}: 60 minutes have passed since report generation (LOCKED).\n\nDo you want to load this flight's data into the Load Control page to modify and re-generate?`
-                                    );
-                                    if (confirmForceEdit) {
-                                      setLoadControlEditReport(r);
-                                      navigateToPage('load-control');
-                                      showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN LOAD CONTROL`);
-                                    } else {
-                                      const loadedData = reconstructFormDataFromStoredReport(r);
-                                      setViewedSavedReport({
-                                        formData: loadedData,
-                                        user: {
-                                          userName: r.preparedBy || userInfo.userName,
-                                          usbaId: r.usbaId || userInfo.usbaId,
-                                          stationName: r.station || userInfo.stationName,
-                                        },
-                                      });
-                                      navigateToPage('dual-report');
-                                    }
+                                  const confirmForceEdit = window.confirm(
+                                    `FLIGHT ${r.flightNo}: 60 minutes have passed since report generation (LOCKED).\n\nDo you want to load this flight's data into the Data Entry page to modify and re-generate?`
+                                  );
+                                  if (confirmForceEdit) {
+                                    handleForceEditSavedFlight(r);
                                   } else {
-                                    const confirmForceEdit = window.confirm(
-                                      `FLIGHT ${r.flightNo}: 60 minutes have passed since report generation (LOCKED).\n\nDo you want to load this flight's data into the Data Entry page to modify and re-generate?`
-                                    );
-                                    if (confirmForceEdit) {
-                                      handleForceEditSavedFlight(r);
-                                    } else {
-                                      const loadedData = reconstructFormDataFromStoredReport(r);
-                                      setViewedSavedReport({
-                                        formData: loadedData,
-                                        user: {
-                                          userName: r.preparedBy || userInfo.userName,
-                                          usbaId: r.usbaId || userInfo.usbaId,
-                                          stationName: r.station || userInfo.stationName,
-                                        },
-                                      });
-                                      navigateToPage('dual-report');
-                                    }
+                                    const loadedData = reconstructFormDataFromStoredReport(r);
+                                    setViewedSavedReport({
+                                      formData: loadedData,
+                                      user: {
+                                        userName: r.preparedBy || userInfo.userName,
+                                        usbaId: r.usbaId || userInfo.usbaId,
+                                        stationName: r.station || userInfo.stationName,
+                                      },
+                                    });
+                                    navigateToPage('dual-report');
                                   }
                                 }}
                                 className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400/90 border border-slate-700 font-bold text-xs tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-sm"
@@ -1890,22 +1874,33 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => {
-                                const loadedData = reconstructFormDataFromStoredReport(r);
-                                setViewedSavedReport({
-                                  formData: loadedData,
-                                  user: {
-                                    userName: r.preparedBy || userInfo.userName,
-                                    usbaId: r.usbaId || userInfo.usbaId,
-                                    stationName: r.station || userInfo.stationName,
-                                  },
-                                });
-                                navigateToPage('dual-report');
+                                if (savedFlightsSource === 'load-control') {
+                                  setLoadControlEditReport({ ...r });
+                                  setLoadControlViewMode('dual-report');
+                                  navigateToPage('load-control');
+                                  showToast(`VIEWING FLIGHT ${r.flightNo || 'FINAL REPORT'} (MESSAGE & LDM)`);
+                                } else {
+                                  const loadedData = reconstructFormDataFromStoredReport(r);
+                                  setViewedSavedReport({
+                                    formData: loadedData,
+                                    user: {
+                                      userName: r.preparedBy || userInfo.userName,
+                                      usbaId: r.usbaId || userInfo.usbaId,
+                                      stationName: r.station || userInfo.stationName,
+                                    },
+                                  });
+                                  navigateToPage('dual-report');
+                                }
                               }}
-                              className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold tracking-wider uppercase cursor-pointer inline-flex items-center gap-1 transition-all"
-                              title="View & Print Official Report"
+                              className="px-3.5 py-2 rounded-xl bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 hover:text-white border border-cyan-500/50 text-xs font-bold tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow"
+                              title={
+                                savedFlightsSource === 'load-control'
+                                  ? "View Final Report (Departure Message & LDM)"
+                                  : "View & Print Official Report"
+                              }
                             >
-                              <Eye className="w-3.5 h-3.5 text-emerald-400" />
-                              <span className="hidden sm:inline text-[11px]">VIEW</span>
+                              <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>VIEW</span>
                             </button>
                           </div>
                         </td>
@@ -3371,8 +3366,19 @@ export default function App() {
       {currentPage === 'load-control' && (
         <LoadControlModule
           userInfo={userInfo}
+          onUpdateStation={(newStation) => {
+            const cleanStn = extractStationCode(newStation);
+            setUserInfo((prev) => ({ ...prev, stationName: cleanStn }));
+            try {
+              localStorage.setItem(
+                'usba_user_info',
+                JSON.stringify({ ...userInfo, stationName: cleanStn })
+              );
+            } catch (e) {}
+          }}
           onBackToDashboard={() => {
             setLoadControlEditReport(null);
+            setLoadControlViewMode('input');
             navigateToPage('welcome');
           }}
           onGoToSavedFlights={() => {
@@ -3380,7 +3386,11 @@ export default function App() {
             navigateToPage('saved-flights');
           }}
           editReport={loadControlEditReport}
-          onClearEditReport={() => setLoadControlEditReport(null)}
+          initialViewMode={loadControlViewMode}
+          onClearEditReport={() => {
+            setLoadControlEditReport(null);
+            setLoadControlViewMode('input');
+          }}
           showToast={showToast}
         />
       )}
