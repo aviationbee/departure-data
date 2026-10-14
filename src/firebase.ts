@@ -161,7 +161,20 @@ export interface StoredFlightReport {
   usbaId: string;
   createdAt: string;
   expiresAt: number;
+  sourceModule?: 'load-control' | 'standard';
   rawFormData?: FlightFormData;
+}
+
+export function isLoadControlReport(r: StoredFlightReport): boolean {
+  if (r.sourceModule === 'load-control') return true;
+  if (r.sourceModule === 'standard') return false;
+  const raw = r.rawFormData as any;
+  return Boolean(
+    raw?.ldmRawData ||
+    raw?.boardingGate ||
+    (r as any).boardingGate ||
+    (r as any).ldmRawData
+  );
 }
 
 export interface ActivityLogEntry {
@@ -266,7 +279,8 @@ export function reconstructFormDataFromStoredReport(r: StoredFlightReport): Flig
 export async function saveFlightReportToCloud(
   formData: FlightFormData,
   userInfo: UserInfo,
-  originalCreatedAt?: string
+  originalCreatedAt?: string,
+  sourceModule?: 'load-control' | 'standard'
 ): Promise<void> {
   const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
   const date = formData.date || new Date().toISOString().split('T')[0];
@@ -275,11 +289,15 @@ export async function saveFlightReportToCloud(
   const now = Date.now();
   const createdAt = originalCreatedAt || new Date(now).toISOString();
   const expiresAt = now + NINETY_DAYS_MS;
+  const detectedSource: 'load-control' | 'standard' =
+    sourceModule ||
+    ((formData as any)?.ldmRawData || (formData as any)?.boardingGate ? 'load-control' : 'standard');
 
   const payload: Omit<StoredFlightReport, 'id'> = {
     station,
     date,
     flightNo,
+    sourceModule: detectedSource,
     route: formData.route || '',
     acReg: formData.acRegSuffix ? `S2-${formData.acRegSuffix}` : '',
     acType: formData.acType || '',

@@ -37,6 +37,7 @@ import {
   syncRealtimeDataOnActivity,
   reconstructFormDataFromStoredReport,
   deleteFlightReportFromCloud,
+  isLoadControlReport,
   StoredFlightReport,
   SystemNoticeDoc,
 } from './firebase';
@@ -764,7 +765,7 @@ export default function App() {
 
     // Automatically save flight data to Cloud Firestore (preserved for 90 days) & log activity
     const originalCreatedAt = editingReportInfo?.createdAt;
-    saveFlightReportToCloud(formData, userInfo, originalCreatedAt);
+    saveFlightReportToCloud(formData, userInfo, originalCreatedAt, 'standard');
 
     // If flight number or date changed during edit, clean up old docId to avoid duplicates
     const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
@@ -960,7 +961,9 @@ export default function App() {
   const todayIsoDate = new Date().toISOString().split('T')[0];
   const todayLocalDate = new Date().toLocaleDateString('en-CA');
   const currentStationUpper = (userInfo.stationName || 'DAC').trim().toUpperCase();
-  const todayStationSavedFlights = cloudFlightReports.filter((r) => {
+
+  // All flights generated today for this station (combined: Load Control & Flight Data)
+  const allStationTodaySavedFlights = cloudFlightReports.filter((r) => {
     const rStation = (r.station || 'DAC').trim().toUpperCase();
     if (rStation !== currentStationUpper) return false;
     const isTodayFlightDate = r.date === todayIsoDate || r.date === todayLocalDate;
@@ -971,7 +974,17 @@ export default function App() {
     return Boolean(isTodayFlightDate || isCreatedToday);
   });
 
-  // Station Today's Saved Flights KPI Totals
+  // Displayed flights in table based on origin:
+  // 1. INSIDE 'FOR LOAD CONTROLLER' -> show only flights generated from Load Controller page
+  // 2. In dashboard -> show only flights generated from 'FLIGHT DATA' page
+  const todayStationSavedFlights = allStationTodaySavedFlights.filter((r) => {
+    if (savedFlightsSource === 'load-control') {
+      return isLoadControlReport(r);
+    }
+    return !isLoadControlReport(r);
+  });
+
+  // Station Today's Saved Flights KPI Totals (reflects active page's flight list)
   const savedTotalFlights = todayStationSavedFlights.length;
   const savedTotalPax = todayStationSavedFlights.reduce(
     (sum, r) => sum + (parseInt(r.paxTotal, 10) || 0),
@@ -994,9 +1007,9 @@ export default function App() {
     0
   );
 
-  // Download Station's Saved Flight Data as Excel
+  // Download Station's Saved Flight Data as Excel (combines ALL flight data together)
   const handleDownloadStationSavedExcel = () => {
-    if (todayStationSavedFlights.length === 0) {
+    if (allStationTodaySavedFlights.length === 0) {
       showToast('NO FLIGHT DATA FOUND TO DOWNLOAD!');
       return;
     }
@@ -1070,7 +1083,7 @@ export default function App() {
         return 'color: #b45309; font-weight: bold; text-align: center; border: 1px solid #000000;';
       };
 
-      const rawFlightDate = todayStationSavedFlights[0]?.date || todayIsoDate;
+      const rawFlightDate = allStationTodaySavedFlights[0]?.date || todayIsoDate;
       const parsedDate = new Date(rawFlightDate + 'T00:00:00Z');
       const formattedDateForHeader = !isNaN(parsedDate.getTime())
         ? `${String(parsedDate.getUTCDate()).padStart(2, '0')} ${parsedDate
@@ -1078,7 +1091,7 @@ export default function App() {
             .toUpperCase()} ${parsedDate.getUTCFullYear()}`
         : rawFlightDate;
 
-      const rowsHtml = todayStationSavedFlights
+      const rowsHtml = allStationTodaySavedFlights
         .map((r) => {
           const raw = r.rawFormData;
 
@@ -1341,7 +1354,7 @@ export default function App() {
       return clean ? `="${clean}"` : '';
     };
 
-    const rows = todayStationSavedFlights.map((r) => {
+    const rows = allStationTodaySavedFlights.map((r) => {
       const raw = r.rawFormData;
       return [
         r.date,
@@ -1644,12 +1657,12 @@ export default function App() {
                 {savedFlightsSource === 'load-control' ? (
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-xs font-black tracking-wider uppercase mb-2">
                     <Sliders className="w-3.5 h-3.5" />
-                    <span>FOR LOAD CONTROLLER &bull; CLICK &ldquo;EDIT&rdquo; TO LOAD INTO LOAD CONTROL</span>
+                    <span>FOR LOAD CONTROLLER &bull; SAVED LOAD CONTROL FLIGHTS ({todayStationSavedFlights.length})</span>
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-black tracking-wider uppercase mb-2">
                     <FolderOpen className="w-3.5 h-3.5" />
-                    <span>STATION: {currentStationUpper} &bull; TODAY&apos;S GENERATED FLIGHT REPORTS</span>
+                    <span>STATION: {currentStationUpper} &bull; SAVED FLIGHT DATA ({todayStationSavedFlights.length})</span>
                   </div>
                 )}
                 <h1 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
@@ -1658,10 +1671,8 @@ export default function App() {
                 </h1>
                 <p className="text-xs text-slate-400 font-sans mt-0.5 uppercase tracking-wider">
                   {savedFlightsSource === 'load-control'
-                    ? "CLICK \u201CEDIT\u201D TO DIRECTLY LOAD SAVED FLIGHT INTO LOAD CONTROL INPUT PAGE"
-                    : "REAL-TIME TODAY'S FLIGHT LIST FOR STATION " +
-                      currentStationUpper +
-                      ' \u2014 CLICK \u201COPEN\u201D TO VIEW OR \u201CEDIT\u201D TO MODIFY WITHIN 60 MINS'}
+                    ? "SHOWING LOAD CONTROL & LDM FLIGHTS GENERATED FROM THIS PAGE \u2014 CLICK \u201CEDIT\u201D TO LOAD INTO LOAD CONTROL"
+                    : "SHOWING FLIGHTS GENERATED FROM FLIGHT DATA PAGE \u2014 CLICK \u201COPEN\u201D TO VIEW OR \u201CEDIT\u201D TO MODIFY WITHIN 60 MINS"}
                 </p>
               </div>
 
@@ -1670,9 +1681,10 @@ export default function App() {
                   type="button"
                   onClick={handleDownloadStationSavedExcel}
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all"
+                  title="Downloads all flight data together (both Load Control and Flight Data)"
                 >
                   <Download className="w-4 h-4" />
-                  <span>DOWNLOAD EXCEL ({todayStationSavedFlights.length})</span>
+                  <span>DOWNLOAD EXCEL (ALL FLIGHTS: {allStationTodaySavedFlights.length})</span>
                 </button>
 
                 <button
@@ -1756,7 +1768,9 @@ export default function App() {
                   {todayStationSavedFlights.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="p-10 text-center text-slate-400 font-bold">
-                        NO FLIGHT REPORTS GENERATED TODAY FOR STATION {currentStationUpper}.
+                        {savedFlightsSource === 'load-control'
+                          ? `NO LOAD CONTROL FLIGHT REPORTS GENERATED TODAY FOR STATION ${currentStationUpper}.`
+                          : `NO FLIGHT DATA REPORTS GENERATED TODAY FOR STATION ${currentStationUpper}.`}
                       </td>
                     </tr>
                   ) : (

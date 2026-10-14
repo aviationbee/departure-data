@@ -964,7 +964,7 @@ STATION: ${userStn}`;
 
     const originalCreatedAt = editingReportInfo?.createdAt;
     try {
-      await saveFlightReportToCloud(flightPayload, userInfo, originalCreatedAt);
+      await saveFlightReportToCloud(flightPayload, userInfo, originalCreatedAt, 'load-control');
 
       // If flight number or date changed during edit, clean up old docId to avoid duplicates
       const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
