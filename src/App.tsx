@@ -66,6 +66,7 @@ import {
   Download,
   Edit3,
   Sliders,
+  Trash2,
 } from 'lucide-react';
 
 const STATION_OPTIONS = [
@@ -260,6 +261,7 @@ export default function App() {
   const [savedFlightsSource, setSavedFlightsSource] = useState<'standard' | 'load-control'>('standard');
   const [loadControlEditReport, setLoadControlEditReport] = useState<StoredFlightReport | null>(null);
   const [loadControlViewMode, setLoadControlViewMode] = useState<'input' | 'dual-report'>('input');
+  const [flightToRemove, setFlightToRemove] = useState<StoredFlightReport | null>(null);
   const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
   });
@@ -757,6 +759,21 @@ export default function App() {
     setLastDataPage(targetPage);
     navigateToPage(targetPage);
     showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN DATA ENTRY PAGE`);
+  };
+
+  const handleConfirmRemoveFlight = async () => {
+    if (!flightToRemove) return;
+    const target = flightToRemove;
+    try {
+      await deleteFlightReportFromCloud(target, userInfo);
+      setCloudFlightReports((prev) => prev.filter((r) => r.id !== target.id));
+      showToast(`FLIGHT ${target.flightNo} REMOVED FROM DATA STORE!`);
+    } catch (err) {
+      console.error('Error removing flight:', err);
+      showToast('FAILED TO REMOVE FLIGHT. PLEASE TRY AGAIN.');
+    } finally {
+      setFlightToRemove(null);
+    }
   };
 
   const handleGenerateReport = (type: 'intl' | 'dom') => {
@@ -1764,9 +1781,6 @@ export default function App() {
                     <th className="p-3.5 text-left font-bold whitespace-nowrap">FLIGHT NO</th>
                     <th className="p-3.5 text-left font-bold whitespace-nowrap">ROUTE</th>
                     <th className="p-3.5 text-left font-bold whitespace-nowrap">A/C REG</th>
-                    <th className="p-3.5 text-left font-bold whitespace-nowrap">CAPTAIN</th>
-                    <th className="p-3.5 text-center font-bold whitespace-nowrap">STD / ATD / A/B</th>
-                    <th className="p-3.5 text-center font-bold whitespace-nowrap">TOTAL PAX</th>
                     <th className="p-3.5 text-left font-bold whitespace-nowrap">PREPARED BY</th>
                     <th className="p-3.5 text-center font-bold whitespace-nowrap">OPTION</th>
                   </tr>
@@ -1774,7 +1788,7 @@ export default function App() {
                 <tbody>
                   {todayStationSavedFlights.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="p-10 text-center text-slate-400 font-bold">
+                      <td colSpan={7} className="p-10 text-center text-slate-400 font-bold">
                         {savedFlightsSource === 'load-control'
                           ? `NO LOAD CONTROL FLIGHT REPORTS GENERATED TODAY FOR STATION ${currentStationUpper}.`
                           : `NO FLIGHT DATA REPORTS GENERATED TODAY FOR STATION ${currentStationUpper}.`}
@@ -1799,15 +1813,6 @@ export default function App() {
                         <td className="p-3.5 font-bold text-slate-200 whitespace-nowrap">
                           {r.acReg} <span className="text-[11px] text-slate-400">({r.acType})</span>
                         </td>
-                        <td className="p-3.5 font-bold text-white whitespace-nowrap">
-                          {r.captain}
-                        </td>
-                        <td className="p-3.5 text-center font-mono text-slate-200 whitespace-nowrap">
-                          {r.std || '--'} / {r.chocksOff || '--'} / {r.airborne || '--'}
-                        </td>
-                        <td className="p-3.5 text-center font-bold text-emerald-300 whitespace-nowrap">
-                          {r.paxTotal || '0'}+{r.paxInfant || '0'}
-                        </td>
                         <td className="p-3.5 font-bold text-indigo-300 whitespace-nowrap">
                           {r.preparedBy}
                           {r.usbaId && (
@@ -1819,7 +1824,6 @@ export default function App() {
                         <td className="p-3.5 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">
                             {/* ACTION BUTTON: EDIT (OR LOCKED AFTER 60 MINS) */}
-                            {/* ACTION BUTTON: EDIT */}
                             {savedFlightsSource === 'load-control' ? (
                               <button
                                 type="button"
@@ -1829,7 +1833,7 @@ export default function App() {
                                   navigateToPage('load-control');
                                   showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN LOAD CONTROL FOR EDITING`);
                                 }}
-                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
                                 title="Click to load this flight into Load Control input page for editing"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
@@ -1839,7 +1843,7 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => handleEditSavedFlight(r)}
-                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
                                 title={`Click to edit this flight data in Data Entry page (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`}
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
@@ -1867,7 +1871,7 @@ export default function App() {
                                     navigateToPage('dual-report');
                                   }
                                 }}
-                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400/90 border border-slate-700 font-bold text-xs tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-sm"
+                                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400/90 border border-slate-700 font-bold text-xs tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-sm"
                                 title="Report is over 60 mins old (LOCKED). Click to view or edit."
                               >
                                 <Lock className="w-3.5 h-3.5 text-amber-500" />
@@ -1907,6 +1911,17 @@ export default function App() {
                               <Eye className="w-3.5 h-3.5 text-cyan-400" />
                               <span>VIEW</span>
                             </button>
+
+                            {/* REMOVE FLIGHT BUTTON */}
+                            <button
+                              type="button"
+                              onClick={() => setFlightToRemove(r)}
+                              className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-700 text-rose-300 hover:text-white border border-rose-500/60 text-xs font-bold tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow active:scale-95"
+                              title="Remove this flight data from data store"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                              <span>REMOVE</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1915,6 +1930,63 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+
+            {/* REMOVE FLIGHT CONFIRMATION POPUP MODAL */}
+            {flightToRemove && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+                <div className="bg-slate-900 border-2 border-rose-500/80 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl relative uppercase font-sans">
+                  <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border-2 border-rose-400 text-rose-400 flex items-center justify-center mx-auto mb-4 animate-bounce">
+                    <AlertTriangle className="w-8 h-8" />
+                  </div>
+
+                  <h3 className="text-lg md:text-xl font-black text-rose-400 uppercase tracking-widest mb-2">
+                    REMOVE FLIGHT
+                  </h3>
+
+                  <div className="bg-rose-500/10 border border-rose-500/40 rounded-2xl p-4 my-3 text-slate-100">
+                    <p className="text-base font-black text-white uppercase tracking-wider mb-2">
+                      ARE YOU SURE TO REMOVE THIS FLIGHT?
+                    </p>
+                    <div className="text-xs font-mono text-rose-200/90 space-y-1">
+                      <div>
+                        <span className="text-slate-400">FLIGHT: </span>
+                        <span className="font-bold text-sky-300">{flightToRemove.flightNo}</span>
+                        <span className="text-slate-400"> ({flightToRemove.route})</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">DATE: </span>
+                        <span className="font-bold text-amber-300">{flightToRemove.date}</span>
+                        <span className="text-slate-400"> &bull; A/C: </span>
+                        <span className="font-bold text-emerald-300">{flightToRemove.acReg}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 mb-5 tracking-wider">
+                    THIS ACTION WILL REMOVE THIS FLIGHT DATA PERMANENTLY FROM EVERYWHERE.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFlightToRemove(null)}
+                      className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-black tracking-widest text-xs uppercase border border-slate-600 transition-all cursor-pointer"
+                    >
+                      NO, RETURN
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleConfirmRemoveFlight}
+                      className="py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black tracking-widest text-xs uppercase shadow-xl transition-all cursor-pointer transform active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>YES, REMOVE</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
