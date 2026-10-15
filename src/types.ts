@@ -78,6 +78,9 @@ export interface FlightFormData {
   loadController: string;
   paxHandling: string;
   noshowPnr?: string;
+  ebt?: string;
+  transit?: string;
+  transitPax?: string;
   remarks: string;
   flstRawMessage?: string;
   boardingGate?: string;

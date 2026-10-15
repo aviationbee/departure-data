@@ -111,6 +111,26 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
     ? 'NIL'
     : data.loadController.trim().toUpperCase();
 
+  // Outstation check & EBT / Transit formatting
+  const userStn = (user.stationName || 'DAC').trim().toUpperCase();
+  const isOutstation = originCode !== 'DAC' || (userStn !== 'DAC' && !userStn.startsWith('DAC'));
+
+  const formatEbtDisplay = (ebtVal?: string): string => {
+    if (!ebtVal || isZeroOrEmpty(ebtVal)) return 'NIL';
+    const trimmed = ebtVal.trim();
+    if (/tk|taka/i.test(trimmed)) return trimmed.toUpperCase();
+    return `${trimmed} TK`;
+  };
+  const ebtDisplay = formatEbtDisplay(data.ebt);
+
+  const formatTransitDisplay = (transitVal?: string): string => {
+    if (!transitVal || isZeroOrEmpty(transitVal)) return 'NIL';
+    const trimmed = transitVal.trim();
+    if (/pax/i.test(trimmed)) return trimmed.toUpperCase();
+    return `${trimmed} PAX`;
+  };
+  const transitDisplay = formatTransitDisplay(data.transit || (data as any).transitPax);
+
   // Clean Time Formatter (HHMM without colons if 4 chars)
   const formatTime4 = (timeStr: string) => {
     if (!timeStr || isZeroOrEmpty(timeStr)) return '----';
@@ -119,8 +139,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
     return timeStr.toUpperCase();
   };
 
-  // Station check: Outstation vs DAC
-  const isOutstation = (user.stationName || 'DAC').trim().toUpperCase() !== 'DAC';
+  // Station ground time calculation
   const groundTimeDisplay = calculateGroundTime(data.chocksOn, data.chocksOff);
 
   // Arrival Status Styling (for Outstation)
@@ -687,12 +706,35 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center pt-0.5 gap-2">
+                <div
+                  className={`flex justify-between items-center gap-2 ${
+                    isOutstation ? 'border-b border-slate-200 pb-2' : 'pt-0.5'
+                  }`}
+                >
                   <span className="text-slate-700 font-extrabold shrink-0">REPORT BY</span>
                   <span className="font-black text-indigo-800 uppercase text-[15.5px] text-right">
                     {(user.userName || 'N/A').toUpperCase()}
                   </span>
                 </div>
+
+                {/* OUTSTATION ONLY: EBT & TRANSIT AFTER REPORTED BY */}
+                {isOutstation && (
+                  <>
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-2 gap-2">
+                      <span className="text-slate-700 font-extrabold shrink-0">EBT</span>
+                      <span className="font-black text-slate-950 uppercase text-[15.5px] text-right">
+                        {ebtDisplay}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-0.5 gap-2">
+                      <span className="text-slate-700 font-extrabold shrink-0">TRANSIT</span>
+                      <span className="font-black text-slate-950 uppercase text-[15.5px] text-right">
+                        {transitDisplay}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -1049,10 +1049,10 @@ export const LoadControlModule: React.FC<Props> = ({
       await saveFlightReportToCloud(flightPayload, userInfo, originalCreatedAt, 'load-control');
 
       // If flight number or date changed during edit, clean up old docId to avoid duplicates
-      const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
+      const station = extractStationCode(userInfo.stationName);
       const date = formData.date || new Date().toISOString().split('T')[0];
       const flightNo = `BS-${(formData.flightNoSuffix || '000').trim().toUpperCase()}`;
-      const newDocId = `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}`;
+      const newDocId = `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}_LC`;
 
       if (editingReportInfo?.id && editingReportInfo.id !== newDocId) {
         await deleteFlightReportFromCloud({ id: editingReportInfo.id } as StoredFlightReport, userInfo);
@@ -1157,7 +1157,7 @@ export const LoadControlModule: React.FC<Props> = ({
                 className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-500/60 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow uppercase"
               >
                 <FolderOpen className="w-4 h-4 text-emerald-200" />
-                <span>SAVED FLIGHT DATA</span>
+                <span>SAVED LDM</span>
               </button>
 
               <button
@@ -1244,7 +1244,7 @@ export const LoadControlModule: React.FC<Props> = ({
                 className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-500/60 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow uppercase"
               >
                 <FolderOpen className="w-4 h-4 text-emerald-200" />
-                <span>SAVED FLIGHT DATA</span>
+                <span>SAVED LDM</span>
               </button>
             </div>
 

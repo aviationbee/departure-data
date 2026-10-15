@@ -153,6 +153,8 @@ const INITIAL_FORM_DATA: FlightFormData = {
   loadController: '',
   paxHandling: '',
   noshowPnr: '',
+  ebt: '',
+  transit: '',
   remarks: '',
   flstRawMessage: '',
 };
@@ -1659,7 +1661,7 @@ export default function App() {
                 {savedFlightsSource === 'load-control' ? (
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-xs font-black tracking-wider uppercase mb-2">
                     <Sliders className="w-3.5 h-3.5" />
-                    <span>FOR LOAD CONTROLLER &bull; SAVED LOAD CONTROL FLIGHTS ({todayStationSavedFlights.length})</span>
+                    <span>FOR LOAD CONTROLLER &bull; SAVED LDM ({todayStationSavedFlights.length})</span>
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-black tracking-wider uppercase mb-2">
@@ -1669,11 +1671,14 @@ export default function App() {
                 )}
                 <h1 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
                   <Plane className="w-6 h-6 text-amber-400" />
-                  <span>SAVED FLIGHT DATA ({todayStationSavedFlights.length})</span>
+                  <span>
+                    {savedFlightsSource === 'load-control' ? 'SAVED LDM' : 'SAVED FLIGHT DATA'} (
+                    {todayStationSavedFlights.length})
+                  </span>
                 </h1>
                 <p className="text-xs text-slate-400 font-sans mt-0.5 uppercase tracking-wider">
                   {savedFlightsSource === 'load-control'
-                    ? "SHOWING LOAD CONTROL & LDM FLIGHTS GENERATED FROM THIS PAGE \u2014 CLICK \u201CEDIT\u201D TO LOAD INTO LOAD CONTROL"
+                    ? "SHOWING LOAD CONTROL & LDM FLIGHTS GENERATED FROM LOAD CONTROLLER \u2014 CLICK \u201CEDIT\u201D TO LOAD INTO LOAD CONTROL"
                     : "SHOWING FLIGHTS GENERATED FROM FLIGHT DATA PAGE \u2014 CLICK \u201COPEN\u201D TO VIEW OR \u201CEDIT\u201D TO MODIFY WITHIN 60 MINS"}
                 </p>
               </div>
@@ -3057,6 +3062,40 @@ export default function App() {
                   }`}
                 />
               </div>
+
+              {/* OUTSTATION ONLY: EBT (EXCESS BAGGAGE CHARGE IN TAKA) */}
+              {isOutstation && (
+                <div className="flex flex-col">
+                  <label className="font-bold text-amber-300 mb-1 tracking-wider uppercase flex items-center justify-between">
+                    <span>EBT</span>
+                    <span className="text-[10px] text-amber-400/80 font-normal">TK</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="EXCESS BAGGAGE CHARGE IN TAKA"
+                    value={formData.ebt || ''}
+                    onChange={(e) => setFormData({ ...formData, ebt: e.target.value.toUpperCase() })}
+                    className="p-2.5 border border-amber-500/60 rounded-xl bg-slate-800/90 text-white font-bold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none text-sm uppercase"
+                  />
+                </div>
+              )}
+
+              {/* OUTSTATION ONLY: TRANSIT (PAX NUMBER) */}
+              {isOutstation && (
+                <div className="flex flex-col">
+                  <label className="font-bold text-sky-300 mb-1 tracking-wider uppercase flex items-center justify-between">
+                    <span>TRANSIT</span>
+                    <span className="text-[10px] text-sky-400/80 font-normal">PAX NO.</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="TRANSIT PAX NUMBER"
+                    value={formData.transit || ''}
+                    onChange={(e) => setFormData({ ...formData, transit: e.target.value })}
+                    className="p-2.5 border border-sky-500/60 rounded-xl bg-slate-800/90 text-white font-bold placeholder:text-slate-500 focus:border-sky-400 focus:outline-none text-sm"
+                  />
+                </div>
+              )}
               </div>
 
               {/* REMARKS */}

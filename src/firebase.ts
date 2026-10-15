@@ -139,6 +139,8 @@ export interface StoredFlightReport {
   mail: string;
   counterNoshow: string;
   noshowPnr: string;
+  ebt?: string;
+  transit?: string;
   gateNoShow: string;
   selfOffload: string;
   vip: string;
@@ -167,14 +169,21 @@ export interface StoredFlightReport {
 
 export function isLoadControlReport(r: StoredFlightReport): boolean {
   if (r.sourceModule === 'load-control') return true;
-  if (r.sourceModule === 'standard') return false;
+  if (r.id && r.id.endsWith('_LC')) return true;
   const raw = r.rawFormData as any;
-  return Boolean(
-    raw?.ldmRawData ||
-    raw?.boardingGate ||
-    (r as any).boardingGate ||
-    (r as any).ldmRawData
-  );
+  if (raw?.ldmRawData || (r as any).ldmRawData) return true;
+  if (raw?.boardingGate !== undefined && raw?.boardingGate !== '') return true;
+  if (raw?.dist?.b1 || raw?.dist?.a1 || raw?.dist?.atrFwr) return true;
+  if (
+    r.route &&
+    /^(SPD|CXB|CGP|RJH|JSR|BZL|ZYL)-(DXB|SHJ|AUH|RUH|JED|MLE|BKK|MCT|DOH|CCU|MAA|CAN|SIN|KUL)$/i.test(
+      r.route.trim()
+    )
+  ) {
+    return true;
+  }
+  if (r.sourceModule === 'standard') return false;
+  return false;
 }
 
 export interface ActivityLogEntry {
@@ -251,6 +260,9 @@ export function reconstructFormDataFromStoredReport(r: StoredFlightReport): Flig
     mail: r.mail || '',
     counterNoshow: r.counterNoshow || '',
     noshowPnr: r.noshowPnr || '',
+    ebt: (r as any).ebt || (r.rawFormData as any)?.ebt || '',
+    transit: (r as any).transit || (r.rawFormData as any)?.transit || '',
+    transitPax: (r as any).transit || (r.rawFormData as any)?.transit || '',
     gateNoShow: r.gateNoShow || '',
     selfOffload: r.selfOffload || '',
     vip: r.vip || '',
@@ -282,16 +294,24 @@ export async function saveFlightReportToCloud(
   originalCreatedAt?: string,
   sourceModule?: 'load-control' | 'standard'
 ): Promise<void> {
-  const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
+  const rawStn = (userInfo.stationName || 'DAC').trim().toUpperCase();
+  const stationMatch = rawStn.match(/^([A-Z]{3})\b/);
+  const station = stationMatch ? stationMatch[1] : (rawStn.slice(0, 3) || 'DAC');
   const date = formData.date || new Date().toISOString().split('T')[0];
   const flightNo = `BS-${(formData.flightNoSuffix || '000').trim().toUpperCase()}`;
-  const docId = `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}`;
+  const isLc =
+    sourceModule === 'load-control' ||
+    Boolean((formData as any)?.ldmRawData) ||
+    Boolean((formData as any)?.boardingGate) ||
+    Boolean((formData as any)?.dist?.b1) ||
+    Boolean((formData as any)?.dist?.atrFwr);
+  const detectedSource: 'load-control' | 'standard' = isLc ? 'load-control' : (sourceModule || 'standard');
+  const docId = isLc
+    ? `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}_LC`
+    : `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}`;
   const now = Date.now();
   const createdAt = originalCreatedAt || new Date(now).toISOString();
   const expiresAt = now + NINETY_DAYS_MS;
-  const detectedSource: 'load-control' | 'standard' =
-    sourceModule ||
-    ((formData as any)?.ldmRawData || (formData as any)?.boardingGate ? 'load-control' : 'standard');
 
   const payload: Omit<StoredFlightReport, 'id'> = {
     station,
@@ -330,6 +350,8 @@ export async function saveFlightReportToCloud(
     mail: formData.mail || 'NIL',
     counterNoshow: formData.counterNoshow || '0',
     noshowPnr: formData.noshowPnr || 'NIL',
+    ebt: formData.ebt || '',
+    transit: formData.transit || formData.transitPax || '',
     gateNoShow: formData.gateNoShow || '0',
     selfOffload: formData.selfOffload || '0',
     vip: formData.vip || '0',
