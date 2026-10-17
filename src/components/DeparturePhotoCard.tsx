@@ -711,7 +711,7 @@ export const DeparturePhotoCard: React.FC<Props> = ({ data, user }) => {
                     isOutstation ? 'border-b border-slate-200 pb-2' : 'pt-0.5'
                   }`}
                 >
-                  <span className="text-slate-700 font-extrabold shrink-0">REPORT BY</span>
+                  <span className="text-slate-700 font-extrabold shrink-0">REPORTED BY</span>
                   <span className="font-black text-indigo-800 uppercase text-[15.5px] text-right">
                     {(user.userName || 'N/A').toUpperCase()}
                   </span>

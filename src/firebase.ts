@@ -170,16 +170,22 @@ export interface StoredFlightReport {
 export function isLoadControlReport(r: StoredFlightReport): boolean {
   if (r.sourceModule === 'load-control') return true;
   if (r.id && r.id.endsWith('_LC')) return true;
-  const raw = r.rawFormData as any;
+  const raw = (r.rawFormData as any) || {};
   if (raw?.ldmRawData || (r as any).ldmRawData) return true;
+  if (raw?.docIn !== undefined || (r as any).docIn !== undefined) return true;
   if (raw?.boardingGate !== undefined && raw?.boardingGate !== '') return true;
-  if (raw?.dist?.b1 || raw?.dist?.a1 || raw?.dist?.atrFwr) return true;
+  if (raw?.dist?.b1 || raw?.dist?.a1 || raw?.dist?.atrFwr || raw?.distB1 || raw?.baggageComNo) return true;
   if (
     r.route &&
     /^(SPD|CXB|CGP|RJH|JSR|BZL|ZYL)-(DXB|SHJ|AUH|RUH|JED|MLE|BKK|MCT|DOH|CCU|MAA|CAN|SIN|KUL)$/i.test(
       r.route.trim()
     )
   ) {
+    return true;
+  }
+  // BS 341 generated from SPD or outstation load control
+  const numOnly = (r.flightNo || '').replace(/\D/g, '');
+  if (numOnly === '341' && (r.station === 'SPD' || (r.route || '').includes('SPD'))) {
     return true;
   }
   if (r.sourceModule === 'standard') return false;

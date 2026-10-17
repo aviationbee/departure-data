@@ -18,11 +18,15 @@ export interface FlightFormData {
   arrivalStatus?: string;
   arrPaxAdult?: string;
   arrPaxInfant?: string;
+  arrTotalPax?: string;
   arrBaggageWeight?: string;
   arrBaggagePcs?: string;
+  arrBagWeight?: string;
+  arrBagPcs?: string;
   arrCargoWeight?: string;
   arrCargoPcs?: string;
   arrMail?: string;
+  arrMailPcs?: string;
   arrVip?: string;
   arrCip?: string;
   arrMaas?: string;
@@ -30,6 +34,8 @@ export interface FlightFormData {
   arrFlightNo?: string;
   arrRoute?: string;
   arrPaxReceiving?: string;
+  arrUnloading?: string;
+  arrHandling?: string;
   std: string;
   doorClosed: string;
   chocksOff: string;

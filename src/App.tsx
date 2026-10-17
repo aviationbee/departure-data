@@ -986,7 +986,9 @@ export default function App() {
   // All flights generated today for this station (combined: Load Control & Flight Data)
   const allStationTodaySavedFlights = cloudFlightReports.filter((r) => {
     const rStation = extractStationCode(r.station || 'DAC');
-    if (rStation !== currentStationCode) return false;
+    const routeStation = (r.route || '').trim().toUpperCase().split('-')[0];
+    const stationMatches = rStation === currentStationCode || routeStation === currentStationCode;
+    if (!stationMatches) return false;
     const isTodayFlightDate = r.date === todayIsoDate || r.date === todayLocalDate;
     const isCreatedToday =
       r.createdAt &&
@@ -1823,62 +1825,6 @@ export default function App() {
                         </td>
                         <td className="p-3.5 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">
-                            {/* ACTION BUTTON: EDIT (OR LOCKED AFTER 60 MINS) */}
-                            {savedFlightsSource === 'load-control' ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setLoadControlEditReport({ ...r });
-                                  setLoadControlViewMode('input');
-                                  navigateToPage('load-control');
-                                  showToast(`FLIGHT ${r.flightNo || 'DATA'} LOADED IN LOAD CONTROL FOR EDITING`);
-                                }}
-                                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
-                                title="Click to load this flight into Load Control input page for editing"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                                <span>EDIT</span>
-                              </button>
-                            ) : !isReportLocked(r.createdAt) ? (
-                              <button
-                                type="button"
-                                onClick={() => handleEditSavedFlight(r)}
-                                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer inline-flex items-center gap-1.5 transition-all transform active:scale-95"
-                                title={`Click to edit this flight data in Data Entry page (Remaining: ${getEditRemainingMinutes(r.createdAt)} mins)`}
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                                <span>EDIT</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const confirmForceEdit = window.confirm(
-                                    `FLIGHT ${r.flightNo}: 60 minutes have passed since report generation (LOCKED).\n\nDo you want to load this flight's data into the Data Entry page to modify and re-generate?`
-                                  );
-                                  if (confirmForceEdit) {
-                                    handleForceEditSavedFlight(r);
-                                  } else {
-                                    const loadedData = reconstructFormDataFromStoredReport(r);
-                                    setViewedSavedReport({
-                                      formData: loadedData,
-                                      user: {
-                                        userName: r.preparedBy || userInfo.userName,
-                                        usbaId: r.usbaId || userInfo.usbaId,
-                                        stationName: r.station || userInfo.stationName,
-                                      },
-                                    });
-                                    navigateToPage('dual-report');
-                                  }
-                                }}
-                                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400/90 border border-slate-700 font-bold text-xs tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-sm"
-                                title="Report is over 60 mins old (LOCKED). Click to view or edit."
-                              >
-                                <Lock className="w-3.5 h-3.5 text-amber-500" />
-                                <span>LOCKED</span>
-                              </button>
-                            )}
-
                             {/* VIEW REPORT ICON BUTTON */}
                             <button
                               type="button"

@@ -11,16 +11,17 @@ interface Props {
 export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
   const regDetails = getRegistrationDetails(data.acRegSuffix);
 
-  // 1. DATE: Auto generated as today's date
+  // 1. DATE: Flight date or today's date
   const todayIso = new Date().toISOString().split('T')[0];
-  const formattedTodayDate = formatDate(todayIso, 'LONG').toUpperCase();
+  const dateToUse = data.date || todayIso;
+  const formattedTodayDate = formatDate(dateToUse, 'LONG').toUpperCase();
 
-  // 2. FLT NO.: Arrival flight number (e.g. if departure flight is 172 -> arrival flight is 171 with auto-generated route)
-  const rawFlightNum = (data.flightNoSuffix || '').trim();
+  // 2. FLT NO.: Arrival flight number & route
+  const rawFlightNum = (data.arrFlightNo || data.flightNoSuffix || '').replace(/^BS-/i, '').trim();
   const parsedFlightNum = parseInt(rawFlightNum, 10);
   const arrivalFlightNumStr =
     !isNaN(parsedFlightNum) && parsedFlightNum > 0
-      ? String(parsedFlightNum % 2 === 0 ? parsedFlightNum - 1 : parsedFlightNum)
+      ? rawFlightNum
       : rawFlightNum || 'XXX';
 
   const matchedArrivalRoute =
@@ -35,16 +36,13 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
     return stn && stn !== 'DAC' ? `DAC-${stn}` : data.route || 'N/A';
   })();
   const arrivalRoute = (data.arrRoute?.trim() || matchedArrivalRoute || fallbackArrivalRoute).toUpperCase();
-  const rawCustomArrFlt = data.arrFlightNo?.trim();
-  const arrivalFlightNoDisplay = rawCustomArrFlt
-    ? rawCustomArrFlt.toUpperCase().startsWith('BS-')
-      ? `${rawCustomArrFlt.toUpperCase()} (${arrivalRoute})`
-      : `BS-${rawCustomArrFlt.toUpperCase()} (${arrivalRoute})`
-    : `BS-${arrivalFlightNumStr} (${arrivalRoute})`;
+  const rawCustomArrFlt = (data.arrFlightNo || '').replace(/^BS-/i, '').trim();
+  const finalArrFltNum = rawCustomArrFlt || arrivalFlightNumStr;
+  const arrivalFlightNoDisplay = `BS-${finalArrFltNum} (${arrivalRoute})`;
 
-  // 3. ORIGIN: Extracted from arrivalRoute (e.g. DXB-DAC -> DXB, DAC-CXB -> DAC)
+  // 3. ORIGIN: Extracted from arrivalRoute (e.g. DXB-SPD -> DXB, DAC-SPD -> DAC)
   const routeParts = arrivalRoute.split('-');
-  const origin = routeParts.length >= 2 ? routeParts[0].trim().toUpperCase() : 'DAC';
+  const origin = routeParts.length >= 2 ? routeParts[0].trim().toUpperCase() : (arrivalRoute ? arrivalRoute : 'DAC');
 
   // Helper: treat empty, '0', '00', 'NIL', 'N/A' as empty
   const isZeroOrEmpty = (val?: string): boolean => {
@@ -55,23 +53,30 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
     return false;
   };
 
-  // 7. TOTAL PAX (e.g. 70+02 = 72)
-  const adultPax = (data.arrPaxAdult || '').trim();
-  const infantPax = (data.arrPaxInfant || '').trim();
-  const adultNum = parseInt(adultPax, 10) || 0;
-  const infantNum = parseInt(infantPax, 10) || 0;
-  const arrivalPaxString =
-    adultPax || infantPax
-      ? `${adultPax || '0'}+${infantPax || '00'} = ${adultNum + infantNum}`
-      : '0+00';
+  // 7. TOTAL PAX (e.g. 149+02 or 70+02 = 72)
+  const arrivalPaxString = (() => {
+    if (data.arrTotalPax && data.arrTotalPax.trim()) {
+      return data.arrTotalPax.trim();
+    }
+    const adultPax = (data.arrPaxAdult || '').trim();
+    const infantPax = (data.arrPaxInfant || '').trim();
+    if (adultPax || infantPax) {
+      const adultNum = parseInt(adultPax, 10) || 0;
+      const infantNum = parseInt(infantPax, 10) || 0;
+      return `${adultPax || '0'}+${infantPax || '00'} = ${adultNum + infantNum}`;
+    }
+    return '0+00';
+  })();
 
   // 8. TOTAL BAGGAGE/PCS (Weight & PCS)
-  const arrivalBaggageString = `BAG: ${data.arrBaggageWeight || '0'} KGS / ${data.arrBaggagePcs || '0'} PCS`;
+  const arrBagW = data.arrBagWeight || data.arrBaggageWeight || '0';
+  const arrBagP = data.arrBagPcs || data.arrBaggagePcs || '0';
+  const arrivalBaggageString = `BAG: ${arrBagW} KGS / ${arrBagP} PCS`;
 
   // 9. TOTAL CGO/MAIL (e.g. CGO-100 KG/10 PCS, MAIL-01)
   const cgoWeight = (data.arrCargoWeight || '').trim() || '0';
   const cgoPcs = (data.arrCargoPcs || '').trim() || '0';
-  const rawMail = (data.arrMail || '').trim();
+  const rawMail = (data.arrMailPcs || data.arrMail || '').trim();
   const mailNum = parseInt(rawMail, 10);
   const mailFormatted = !isZeroOrEmpty(rawMail)
     ? !isNaN(mailNum)
@@ -80,28 +85,40 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
     : '00';
   const totalCgoMailString = `CGO-${cgoWeight} KG/${cgoPcs} PCS, MAIL-${mailFormatted}`;
 
-  // 10. PAX RECEIVING & 11. UNLOADING -> Name of PAX RECEIVING input or RAMP OFFICER
+  // 10. PAX RECEIVING & 11. UNLOADING
   const paxReceivingValue = (
     data.arrPaxReceiving?.trim() ||
     data.rampOfficer ||
     data.loadingStuff ||
     'N/A'
   ).toUpperCase();
-  const rampOfficerValue = (data.rampOfficer || data.loadingStuff || 'N/A').toUpperCase();
+  const unloadingValue = (
+    data.arrUnloading?.trim() ||
+    data.rampOfficer ||
+    data.loadingStuff ||
+    'N/A'
+  ).toUpperCase();
 
   // 12. VIP/CIP/MAAS -> Collected from Arrival input boxes
   const specialHandlingParts: string[] = [];
-  if (!isZeroOrEmpty(data.arrVip)) specialHandlingParts.push(`VIP: ${data.arrVip!.trim()}`);
-  if (!isZeroOrEmpty(data.arrCip)) specialHandlingParts.push(`CIP: ${data.arrCip!.trim()}`);
-  if (!isZeroOrEmpty(data.arrMaas)) specialHandlingParts.push(`MAAS: ${data.arrMaas!.trim()}`);
+  const vipVal = data.arrVip || data.vip;
+  const cipVal = data.arrCip || data.cip;
+  const maasVal = data.arrMaas || data.maas;
+  if (!isZeroOrEmpty(vipVal)) specialHandlingParts.push(`VIP: ${vipVal!.trim()}`);
+  if (!isZeroOrEmpty(cipVal)) specialHandlingParts.push(`CIP: ${cipVal!.trim()}`);
+  if (!isZeroOrEmpty(maasVal)) specialHandlingParts.push(`MAAS: ${maasVal!.trim()}`);
   const specialHandlingOutput =
     specialHandlingParts.length > 0 ? specialHandlingParts.join(' / ').toUpperCase() : 'NIL';
 
-  // 13. HANDLING -> Same name as PAX HANDLING from data entry page
-  const paxHandlingValue = (data.paxHandling || 'N/A').toUpperCase();
+  // 13. HANDLING -> Same name as HANDLING from ARRIVAL INFO or PAX HANDLING from data entry page
+  const paxHandlingValue = (data.arrHandling?.trim() || data.paxHandling || 'N/A').toUpperCase();
 
   const remarksOutput =
-    data.arrRemarks && data.arrRemarks.trim() ? data.arrRemarks.trim().toUpperCase() : 'NIL';
+    data.arrRemarks && data.arrRemarks.trim()
+      ? data.arrRemarks.trim().toUpperCase()
+      : data.remarks && data.remarks.trim()
+      ? data.remarks.trim().toUpperCase()
+      : 'NIL';
 
   return (
     <div className="w-full flex justify-center py-2 print:py-0 uppercase">
@@ -174,7 +191,7 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
             </tr>
             <tr className="border border-black">
               <td className="font-bold p-2 align-top border-r border-black">11. UNLOADING</td>
-              <td className="p-2">: {rampOfficerValue}</td>
+              <td className="p-2">: {unloadingValue}</td>
             </tr>
             <tr className="border border-black">
               <td className="font-bold p-2 align-top border-r border-black">12. VIP/CIP/MAAS</td>
