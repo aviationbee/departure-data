@@ -813,10 +813,11 @@ export const LoadControlModule: React.FC<Props> = ({
 
   // Typewriter text state
   const [typedTitle, setTypedTitle] = useState('');
-  const fullTitle = 'LOAD & TRIM CONTROL AND LDM SYSTEM';
+  const fullTitle = 'INVENTED BY RADOAN RASEL';
   const typeIndexRef = useRef(0);
 
   useEffect(() => {
+    typeIndexRef.current = 0;
     const interval = setInterval(() => {
       if (typeIndexRef.current < fullTitle.length) {
         setTypedTitle(fullTitle.slice(0, typeIndexRef.current + 1));
@@ -1430,6 +1431,9 @@ export const LoadControlModule: React.FC<Props> = ({
                   </span>
                 )}
               </div>
+              <p className="text-[11px] font-mono text-[#ffaa00] font-black uppercase tracking-widest mt-0.5">
+                INVENTED BY RADOAN RASEL
+              </p>
               <p className="text-xs text-cyan-300/80 font-mono mt-0.5 uppercase tracking-wide">
                 FLIGHT: <strong className="text-amber-300">BS-{formData.flightNoSuffix}</strong> ({formData.route}) &bull; DATE: {formData.date} &bull; OFFICER:{' '}
                 {userInfo.userName} &bull; STATION: {userInfo.stationName}
@@ -2553,8 +2557,8 @@ export const LoadControlModule: React.FC<Props> = ({
                   </div>
                 </div>
 
-                {/* TOTAL WEIGHT & STATUS */}
-                <div className="flex flex-col">
+                {/* TOTAL WEIGHT */}
+                <div className="flex flex-col sm:col-span-2">
                   <label className="text-xs font-bold text-sky-400 mb-1 tracking-wider uppercase flex items-center justify-between">
                     <span>TOTAL WEIGHT</span>
                     <span className="text-[10px] text-cyan-400 font-mono">BAG + CGO</span>
@@ -2565,20 +2569,6 @@ export const LoadControlModule: React.FC<Props> = ({
                     value={formData.totalWeight ? `${formData.totalWeight} KG` : ''}
                     placeholder="0 KG"
                     className="p-2 rounded bg-[#0a1526]/80 border border-cyan-700/60 text-emerald-300 font-mono font-bold text-sm cursor-not-allowed"
-                  />
-                </div>
-
-                <div className="flex flex-col">
-                  <label className="text-xs font-bold text-sky-400 mb-1 tracking-wider uppercase flex items-center justify-between">
-                    <span>HOLD STATUS</span>
-                    <span className="text-[10px] text-amber-300 font-mono">LOGIC</span>
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={formData.status}
-                    placeholder="EQUAL / +/-"
-                    className="p-2 rounded bg-[#0a1526]/80 border border-cyan-700/60 text-amber-300 font-mono font-bold text-sm cursor-not-allowed uppercase"
                   />
                 </div>
 
@@ -2693,6 +2683,21 @@ export const LoadControlModule: React.FC<Props> = ({
                       PLEASE ENTER A/C REG TO LOAD COMPARTMENT INPUTS
                     </div>
                   )}
+                </div>
+
+                {/* HOLD STATUS - NOW SHOWS IMMEDIATELY AFTER CARGO HOLD DISTRIBUTION */}
+                <div className="flex flex-col sm:col-span-2">
+                  <label className="text-xs font-bold text-sky-400 mb-1 tracking-wider uppercase flex items-center justify-between">
+                    <span>HOLD STATUS</span>
+                    <span className="text-[10px] text-amber-300 font-mono">BASED ON DISTRIBUTION</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={formData.status}
+                    placeholder="EQUAL / +/-"
+                    className="p-2 rounded bg-[#0a1526]/80 border border-cyan-700/60 text-amber-300 font-mono font-bold text-sm cursor-not-allowed uppercase"
+                  />
                 </div>
 
                 {/* MAIL */}
@@ -2932,21 +2937,23 @@ export const LoadControlModule: React.FC<Props> = ({
                   />
                 </div>
 
-                {/* PAX HANDLING */}
-                <div className="flex flex-col">
-                  <label className="text-xs font-bold text-sky-400 mb-1 tracking-wider uppercase">
-                    PAX HANDLING
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="NAME"
-                    value={formData.paxHandling}
-                    onChange={(e) =>
-                      setFormData({ ...formData, paxHandling: e.target.value.toUpperCase() })
-                    }
-                    className="p-2 rounded bg-[#060d1a]/90 border border-cyan-900/80 text-[#00f0ff] font-bold text-sm uppercase"
-                  />
-                </div>
+                {/* PAX HANDLING (Only for Outstations, removed for DAC station) */}
+                {isOutstation && (
+                  <div className="flex flex-col">
+                    <label className="text-xs font-bold text-sky-400 mb-1 tracking-wider uppercase">
+                      PAX HANDLING
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="NAME"
+                      value={formData.paxHandling}
+                      onChange={(e) =>
+                        setFormData({ ...formData, paxHandling: e.target.value.toUpperCase() })
+                      }
+                      className="p-2 rounded bg-[#060d1a]/90 border border-cyan-900/80 text-[#00f0ff] font-bold text-sm uppercase"
+                    />
+                  </div>
+                )}
 
                 {/* REMARKS (DEPARTURE) */}
                 <div className="flex flex-col sm:col-span-2 lg:col-span-4">
