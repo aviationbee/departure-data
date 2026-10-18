@@ -450,8 +450,16 @@ export function parseFlstMessage(rawText?: string, data?: FlightFormData): strin
   const paxList: ParsedFlstPax[] = [];
   let currentPax: ParsedFlstPax | null = null;
 
+  const DCS_SYSTEM_META_REGEX =
+    /^\s*(?:APP|DOCS|DOCO|DOCA|BAG|BAGG|FOID|FQTV|PCTC|CTCM|CTCE|EMER|SEAT|CHECKED|BOARDED|STCR)\b/i;
+
   for (const rawLine of lines) {
     if (!rawLine.trim()) continue;
+
+    // Skip DCS system / APIS lines
+    if (DCS_SYSTEM_META_REGEX.test(rawLine)) {
+      continue;
+    }
 
     const mainMatch = rawLine.match(/^\s*(\d+)\s+(.+)$/);
     const rest = mainMatch ? mainMatch[2] : '';
@@ -477,6 +485,8 @@ export function parseFlstMessage(rawText?: string, data?: FlightFormData): strin
         const multiSpaceSplit = rest.split(/\s{3,}/);
         paxName = multiSpaceSplit[0].trim();
       }
+      // Strip any check-in sequence numbers (e.g. "114 " from "114 CRAM/PATRICK  MR")
+      paxName = paxName.replace(/^\s*(?:\d+\s+)+/, '').replace(/\s{3,}/g, ' ').trim();
 
       // Extract PNR (e.g. 0ADPN4 from 0ADPN4/BS/BS or 0AELDQ from 0AELDQ/1B/BS)
       let pnr = '';
@@ -487,9 +497,9 @@ export function parseFlstMessage(rawText?: string, data?: FlightFormData): strin
         afterPnrText = rest.slice(pnrMatch.index + pnrMatch[0].length);
       }
 
-      // Extract Seat (e.g. 18C, 17C, 18A)
+      // Extract Seat (e.g. 18C, 17C, 18A, 2D)
       let seat = '';
-      const seatAfterExc = afterPnrText.match(/Exc\s+\d+(?:\.\d+)?kg\s+([0-9]{1,3}[A-K])\b/i);
+      const seatAfterExc = afterPnrText.match(/Exc\s+\d+(?:\.\d+)?\s*kg\s+([0-9]{1,3}[A-K])\b/i);
       if (seatAfterExc) {
         seat = seatAfterExc[1].toUpperCase();
       } else {
@@ -514,21 +524,22 @@ export function parseFlstMessage(rawText?: string, data?: FlightFormData): strin
       if (ssrMatch) {
         const code = ssrMatch[1].trim().toUpperCase();
         const note = (ssrMatch[2] || '').trim();
-        if (!currentPax.category) {
-          currentPax.category = code;
-          currentPax.designation = note;
-        } else {
-          currentPax.category = `${currentPax.category}/${code}`;
-          if (note) {
-            currentPax.designation = currentPax.designation
-              ? `${currentPax.designation}, ${note}`
-              : note;
+        // Ignore general tags that are not priority passenger codes
+        if (!['APP', 'DOCS', 'DOCO', 'DOCA', 'BAG', 'BAGG', 'FOID', 'FQTV', 'PCTC', 'CTCM', 'CTCE', 'EMER', 'SEAT', 'CHECKED', 'BOARDED'].includes(code)) {
+          if (!currentPax.category) {
+            currentPax.category = code;
+            currentPax.designation = note;
+          } else {
+            currentPax.category = `${currentPax.category}/${code}`;
+            if (note) {
+              currentPax.designation = currentPax.designation
+                ? `${currentPax.designation}, ${note}`
+                : note;
+            }
           }
         }
-      } else {
-        currentPax.designation = currentPax.designation
-          ? `${currentPax.designation} ${trimmedSub}`
-          : trimmedSub;
+      } else if (currentPax.designation) {
+        currentPax.designation = `${currentPax.designation} ${trimmedSub}`.trim();
       }
     }
   }

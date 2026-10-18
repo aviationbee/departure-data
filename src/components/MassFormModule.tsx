@@ -131,47 +131,76 @@ export function parseMassFLST(text: string, selectedCategory: string): MassPasse
   const lines = (text || '').toUpperCase().split(/\r?\n/);
   let currentPax: MassPassenger | null = null;
 
+  // DCS system / APIS lines (APP, DOCS, BAG, FOID, etc.) that do not belong to passenger list or remarks
+  const DCS_SYSTEM_META_REGEX =
+    /^\s*(?:APP|DOCS|DOCO|DOCA|BAG|BAGG|FOID|FQTV|PCTC|CTCM|CTCE|EMER|SEAT|CHECKED|BOARDED|STCR|MEDA)\b/i;
+
   for (const rawLine of lines) {
     if (!rawLine.trim()) continue;
 
-    const mainMatch = rawLine.match(/^\s*(\d+)\s+(.+)$/);
-    const rest = mainMatch ? mainMatch[2] : rawLine.trim();
+    // 1. Skip technical DCS system transmissions (e.g. APP Country: SG..., DOCS P/..., BAG...)
+    if (DCS_SYSTEM_META_REGEX.test(rawLine)) {
+      continue;
+    }
 
-    const isSsrContinuation = /^\s*(?:MAAS|WCHR|WCHC|WCHS|VIP|CIP)\b/i.test(rawLine);
+    // 2. Check for SSR / Category lines (MAAS, WCHR, WCHC, WCHS, VIP, CIP)
+    const isCategoryLine = /^\s*(?:SSR\s+|OSI\s+)?(?:MAAS|WCHR|WCHC|WCHS|VIP|CIP)\b/i.test(rawLine);
+    if (isCategoryLine) {
+      if (currentPax) {
+        const trimmedLine = rawLine.trim();
+        const extracted = trimmedLine
+          .replace(/^(?:SSR\s+|OSI\s+)?(?:MAAS|WCHR|WCHC|WCHS|VIP|CIP)\s*[:\-]?\s*/i, '')
+          .trim();
+        if (extracted) {
+          currentPax.remarks = currentPax.remarks
+            ? `${currentPax.remarks} ${extracted}`.trim()
+            : extracted;
+        }
+      }
+      continue;
+    }
+
+    // 3. Check if line is a main passenger row
+    const hasPassengerName = /[A-Z0-9\-\']+\/[A-Z0-9\-\']+/i.test(rawLine);
     const looksLikeMainPaxLine =
-      !isSsrContinuation &&
-      (Boolean(mainMatch) ||
-        /(?:ETKT|TKNE)/i.test(rawLine) ||
+      hasPassengerName &&
+      (/^\s*\d+\s+/i.test(rawLine) ||
+        /(?:ETKT|TKNE|\d{10,})/i.test(rawLine) ||
         /\b[A-Z0-9]{5,8}\/[A-Z0-9]{2}/i.test(rawLine) ||
-        /\d+\.\d+KG/i.test(rawLine) ||
-        /[A-Z]+\/[A-Z]+/.test(rawLine));
+        /\d+\.\d+\s*KG/i.test(rawLine) ||
+        /EXC\s+\d+/i.test(rawLine));
 
     if (looksLikeMainPaxLine) {
       if (currentPax && currentPax.name) {
         paxList.push(currentPax);
       }
 
+      // Strip ALL leading sequence numbers and check-in numbers (e.g. "1  114 " -> "CRAM/PATRICK  MR...")
+      const afterNumbers = rawLine.replace(/^\s*(?:\d+\s+)+/, '').trim();
+
       // Extract Passenger Name cleanly before ETKT / TKNE / 10+ digit ticket number or 3+ spaces
-      let paxName = rest;
-      const nameSplit = rest.split(/\s+(?=ETKT|TKNE|\d{10,})/i);
+      let paxName = afterNumbers;
+      const nameSplit = afterNumbers.split(/\s+(?=ETKT|TKNE|\d{10,})/i);
       if (nameSplit.length > 1) {
         paxName = nameSplit[0].trim();
       } else {
-        const multiSpaceSplit = rest.split(/\s{3,}/);
+        const multiSpaceSplit = afterNumbers.split(/\s{3,}/);
         paxName = multiSpaceSplit[0].trim();
       }
-      paxName = paxName.replace(/\s+/g, ' ').trim();
+      // Strip any residual leading digits or excessive spaces
+      paxName = paxName.replace(/^[\d\s]+/, '').replace(/\s{3,}/g, ' ').trim();
 
-      // Extract Seat Number accurately (ignoring /1B/ inside PNR like 0AEHN5/1B/BS)
+      // Extract Seat Number accurately (e.g. Exc 0kg 2D, or standalone seat number)
       let seat = '';
-      const seatAfterExc = rest.match(/EXC\s+\d+(?:\.\d+)?KG\s+([0-9]{1,3}[A-K])\b/i);
+      const seatAfterExc = rawLine.match(/EXC\s+\d+(?:\.\d+)?\s*KG\s+([0-9]{1,3}[A-K])\b/i);
       if (seatAfterExc) {
         seat = seatAfterExc[1].toUpperCase();
       } else {
         // Strip PNR slash blocks (e.g. 0AEHN5/1B/BS) and ticket numbers before searching for seat
-        const cleanedForSeat = rest
+        const cleanedForSeat = rawLine
           .replace(/\b[A-Z0-9]{5,8}\/[A-Z0-9]{2}(?:\/[A-Z0-9]{2})?\b/gi, ' ')
-          .replace(/\b(?:ETKT|TKNE)[A-Z0-9]+\b/gi, ' ');
+          .replace(/\b(?:ETKT|TKNE)[A-Z0-9]+\b/gi, ' ')
+          .replace(/\b\d{10,}\b/g, ' ');
         const allSeatMatches = [...cleanedForSeat.matchAll(/(?:^|\s)([0-9]{1,2}[A-K])(?=\s|$)/gi)];
         if (allSeatMatches.length > 0) {
           seat = allSeatMatches[allSeatMatches.length - 1][1].toUpperCase();
@@ -185,27 +214,23 @@ export function parseMassFLST(text: string, selectedCategory: string): MassPasse
       };
     } else if (currentPax) {
       const trimmedLine = rawLine.trim();
-      if (trimmedLine.includes(selectedCategory)) {
-        const extracted = trimmedLine
-          .substring(trimmedLine.indexOf(selectedCategory) + selectedCategory.length)
-          .trim();
-        currentPax.remarks = currentPax.remarks
-          ? `${currentPax.remarks} ${extracted}`.trim()
-          : extracted;
-      } else if (trimmedLine.includes('MAAS')) {
-        const extracted = trimmedLine.substring(trimmedLine.indexOf('MAAS') + 4).trim();
-        currentPax.remarks = currentPax.remarks
-          ? `${currentPax.remarks} ${extracted}`.trim()
-          : extracted;
+      if (trimmedLine.includes('MAAS')) {
+        const extracted = trimmedLine.replace(/^.*?\bMAAS\s*[:\-]?\s*/i, '').trim();
+        if (extracted) {
+          currentPax.remarks = currentPax.remarks ? `${currentPax.remarks} ${extracted}`.trim() : extracted;
+        }
       } else if (trimmedLine.includes('WCHR')) {
-        const extracted = trimmedLine.substring(trimmedLine.indexOf('WCHR') + 4).trim();
-        currentPax.remarks = currentPax.remarks
-          ? `${currentPax.remarks} ${extracted}`.trim()
-          : extracted;
-      } else {
-        currentPax.remarks = currentPax.remarks
-          ? `${currentPax.remarks} ${trimmedLine}`.trim()
-          : trimmedLine;
+        const extracted = trimmedLine.replace(/^.*?\bWCHR\s*[:\-]?\s*/i, '').trim();
+        if (extracted) {
+          currentPax.remarks = currentPax.remarks ? `${currentPax.remarks} ${extracted}`.trim() : extracted;
+        }
+      } else if (selectedCategory && trimmedLine.includes(selectedCategory)) {
+        const extracted = trimmedLine.replace(new RegExp(`^.*?\\b${selectedCategory}\\s*[:\\-]?\\s*`, 'i'), '').trim();
+        if (extracted) {
+          currentPax.remarks = currentPax.remarks ? `${currentPax.remarks} ${extracted}`.trim() : extracted;
+        }
+      } else if (currentPax.remarks) {
+        currentPax.remarks = `${currentPax.remarks} ${trimmedLine}`.trim();
       }
     }
   }
