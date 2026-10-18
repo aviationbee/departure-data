@@ -1036,8 +1036,6 @@ export const LoadControlModule: React.FC<Props> = ({
 
   // Generate Flight LDM Text according to destination rules
   const generateLdmForDestination = (d: LdmFormData, officerUser?: UserInfo): string => {
-    const routeParts = (d.route || '').split('-').map((s) => s.trim().toUpperCase()).filter(Boolean);
-    const dest = routeParts.length > 1 ? routeParts[1] : (routeParts[0] || 'DAC');
     let ldm = '';
     const activeUser = officerUser || userInfo;
     const userStation = (activeUser.stationName || 'DAC').trim().toUpperCase();
@@ -1089,7 +1087,158 @@ export const LoadControlModule: React.FC<Props> = ({
     }
     const wcSiString = siWcLines.join('\n');
 
-    switch (dest) {
+    const upperRoute = (d.route || '').toUpperCase();
+    const cleanFlightNum = parseInt((d.flightNoSuffix || '').replace(/\D/g, ''), 10);
+
+    // Extract destination station from route or flight number
+    let dest = 'DAC';
+    const segments = upperRoute.split(/[&\/,]/).map((s) => s.trim()).filter(Boolean);
+    const lastSegment = segments[segments.length - 1] || upperRoute;
+    const parts = lastSegment.split('-').map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      dest = parts[parts.length - 1];
+    } else if (parts.length === 1 && parts[0]) {
+      dest = parts[0];
+    }
+
+    // Determine specific station profile
+    let profile = dest;
+    if (upperRoute.includes('DXB') || [341, 342, 343, 344].includes(cleanFlightNum)) {
+      profile = 'DXB';
+      if (dest === 'DAC' && upperRoute.includes('DXB') && !upperRoute.endsWith('DAC')) dest = 'DXB';
+    } else if (upperRoute.includes('AUH') || [349, 350, 351, 352].includes(cleanFlightNum)) {
+      profile = 'AUH';
+      if (dest === 'DAC' && upperRoute.includes('AUH') && !upperRoute.endsWith('DAC')) dest = 'AUH';
+    } else if (upperRoute.includes('SHJ') || [345, 346, 347, 348].includes(cleanFlightNum)) {
+      profile = 'SHJ';
+      if (dest === 'DAC' && upperRoute.includes('SHJ') && !upperRoute.endsWith('DAC')) dest = 'SHJ';
+    } else if (upperRoute.includes('RUH') || [381, 382, 383, 384].includes(cleanFlightNum)) {
+      profile = 'RUH';
+      if (dest === 'DAC' && upperRoute.includes('RUH') && !upperRoute.endsWith('DAC')) dest = 'RUH';
+    } else if (upperRoute.includes('JED') || [361, 362, 363, 364].includes(cleanFlightNum)) {
+      profile = 'JED';
+      if (dest === 'DAC' && upperRoute.includes('JED') && !upperRoute.endsWith('DAC')) dest = 'JED';
+    } else if (upperRoute.includes('DOH') || [333, 334, 335, 336].includes(cleanFlightNum)) {
+      profile = 'DOH';
+      if (dest === 'DAC' && upperRoute.includes('DOH') && !upperRoute.endsWith('DAC')) dest = 'DOH';
+    } else if (upperRoute.includes('MCT') || [321, 322, 323, 324].includes(cleanFlightNum)) {
+      profile = 'MCT';
+      if (dest === 'DAC' && upperRoute.includes('MCT') && !upperRoute.endsWith('DAC')) dest = 'MCT';
+    }
+
+    switch (profile) {
+      // ATTACHMENT 1: DXB, AUH & SHJ (SAME FORMAT)
+      case 'DXB':
+      case 'AUH':
+      case 'SHJ': {
+        const targetStn = dest;
+
+        const pad2 = (val: string | number) => {
+          const n = parseInt(String(val || 0), 10);
+          if (isNaN(n) || n === 0) return '00';
+          return n < 10 ? String(n).padStart(2, '0') : String(n);
+        };
+        const mStr = d.paxMale || '00';
+        const fStr = d.paxFemale || '00';
+        const cStr = pad2(d.paxChild);
+        const iStr = pad2(d.paxInfant);
+
+        // Hold distribution with trailing dots: e.g. 1/0.2/2000.3/2200.4/0.
+        const holdDists = isAirbus
+          ? `1/${dist1}.2/${dist2Val}.3/${dist3}.4/${dist4}.5/${dist5}.`
+          : `1/${dist1}.2/${dist2}.3/${dist3}.4/${dist4}.`;
+
+        ldm =
+          `LDM\n` +
+          `BS${d.flightNoSuffix}/${formatDate(d.date, 'DDMON')}.${finalAcRegLdm}.${seatConfig}.${d.configure}\n` +
+          `-${targetStn}.${mStr}/${fStr}/${cStr}/${iStr}.T.${totalLoad}.${holdDists}PAX/0/${d.paxTotal || '0'}.PAD/0/0\n\n`;
+
+        // CPT Compartments block
+        const bComs = (d.baggageComNo || '').split(/[\s,+/]+/).map((s) => s.trim().toUpperCase());
+        const cComs = (d.cargoComNo || '').split(/[\s,+/]+/).map((s) => s.trim().toUpperCase());
+
+        const getCptLine = (cptNum: number, weight?: string) => {
+          const sNum = String(cptNum);
+          const hasBag = bComs.includes(sNum) || bComs.includes(`C${sNum}`) || bComs.includes(`CPT${sNum}`);
+          const hasCgo = cComs.includes(sNum) || cComs.includes(`C${sNum}`) || cComs.includes(`CPT${sNum}`);
+          if (hasBag && hasCgo) return `CPT${cptNum}- BAG+CGO BY`;
+          if (hasBag) return `CPT${cptNum}- BAG BY`;
+          if (hasCgo) return `CPT${cptNum}- CGO BY`;
+
+          const distVal = parseInt(weight || '0', 10);
+          if (distVal > 0) {
+            const hasAnyCgo = parseInt(d.cargoWeight || '0', 10) > 0;
+            const hasAnyBag = parseInt(d.baggageWeight || '0', 10) > 0;
+            if (hasAnyBag && hasAnyCgo) return `CPT${cptNum}- BAG+CGO BY`;
+            if (hasAnyBag) return `CPT${cptNum}- BAG BY`;
+            if (hasAnyCgo) return `CPT${cptNum}- CGO BY`;
+          }
+
+          return `CPT${cptNum}- NIL`;
+        };
+
+        const cptLines: string[] = [];
+        if (isAirbus) {
+          cptLines.push(getCptLine(1, dist1));
+          cptLines.push(getCptLine(2, dist2));
+          cptLines.push(getCptLine(3, dist3));
+          cptLines.push(getCptLine(4, dist4));
+          cptLines.push(getCptLine(5, dist5));
+        } else {
+          cptLines.push(getCptLine(1, dist1));
+          cptLines.push(getCptLine(2, dist2));
+          cptLines.push(getCptLine(3, dist3));
+          cptLines.push(getCptLine(4, dist4));
+        }
+        ldm += `${cptLines.join('\n')}\n\n`;
+
+        // Cargo & Baggage line: DXB C  210/  1200 M  0 B  180/  3000 O  0 T  0
+        ldm += `${targetStn} C  ${d.cargoPcs || '0'}/  ${d.cargoWeight || '0'} M  0 B  ${d.baggagePcs || '0'}/  ${d.baggageWeight || '0'} O  0 T  0\n`;
+
+        // SI Lines
+        if (crewBagSiLine) ldm += `${crewBagSiLine}\n`;
+        if (comailSiLine) ldm += `${comailSiLine}\n`;
+        if (wcSiString) ldm += `${wcSiString}\n`;
+
+        ldm += `\n\nEND\n\n\n${dynamicRegards}`;
+        break;
+      }
+
+      // ATTACHMENT 2: RUH & JED
+      case 'RUH':
+      case 'JED': {
+        const targetStn = dest;
+        const dists = isAirbus
+          ? `.1/${dist1}.2/${dist2Val}.3/${dist3}.4/${dist4}.5/${dist5}`
+          : `.1/${dist1}.2/${dist2}.3/${dist3}.4/${dist4}`;
+
+        ldm =
+          `LDM\n` +
+          `BS${d.flightNoSuffix}/${formatDate(d.date, 'DD')}.${finalAcRegLdm}.${seatConfig}.${d.configure}\n` +
+          `-${targetStn}.${d.paxMale || '0'}/${d.paxFemale || '0'}/${d.paxChild || '0'}/${d.paxInfant || '0'}.T${totalLoad}${dists}.PAX/0/${d.paxTotal || '0'}.PAD/0/0\n`;
+
+        // SI lines directly follow
+        const wchrFigNum = parseInt(d.wchrFig || '0', 10);
+        if (wchrFigNum > 0 && d.wchrSeat && d.wchrSeat !== 'N/A') {
+          const formattedWchrSeat = d.wchrSeat.replace(/,\s*/g, '/');
+          ldm += `SI O/B 0 WCHR: ${String(wchrFigNum).padStart(2, '0')} SN ${formattedWchrSeat}\n`;
+        }
+        const wchcFigNum = parseInt(d.wchcFig || '0', 10);
+        if (wchcFigNum > 0 && d.wchcSeat && d.wchcSeat !== 'N/A') {
+          const formattedWchcSeat = d.wchcSeat.replace(/,\s*/g, '/');
+          ldm += `SI O/B 0 WCHC: ${String(wchcFigNum).padStart(2, '0')} SN ${formattedWchcSeat}\n`;
+        }
+
+        // SI Cargo & Baggage line: SI JED C  722/  9791 M  0 B  421/  8300 O  0 T  0
+        ldm += `SI ${targetStn} C  ${d.cargoPcs || '0'}/  ${d.cargoWeight || '0'} M  0 B  ${d.baggagePcs || '0'}/  ${d.baggageWeight || '0'} O  0 T  0\n`;
+
+        if (crewBagSiLine) ldm += `${crewBagSiLine}\n`;
+        if (comailSiLine) ldm += `${comailSiLine}\n`;
+
+        ldm += `\nEND\n\n\n${dynamicRegards}`;
+        break;
+      }
+
       case 'DOH': {
         const dists = isAirbus
           ? `.1/${dist1}.2/${dist2Val}.3/${dist3}.4/${dist4}.5/${dist5}`
@@ -1101,7 +1250,28 @@ export const LoadControlModule: React.FC<Props> = ({
         ldm += `SI ${dest} C     ${d.cargoPcs || '0'}/     ${d.cargoWeight || '0'} M     0    B     ${d.baggagePcs || '0'}/     ${d.baggageWeight || '0'} O     0 T     0\n`;
         if (crewBagSiLine) ldm += `${crewBagSiLine}\n`;
         if (comailSiLine) ldm += `${comailSiLine}\n`;
+        if (wcSiString) ldm += `${wcSiString}\n`;
         ldm += `\nEND\n\n\n${dynamicRegards}`;
+        break;
+      }
+
+      case 'MCT': {
+        const distsMct = isAirbus
+          ? `.1/${dist1}.2/${dist2Val}.3/${dist3}.4/${dist4}.5/${dist5}`
+          : `.1/${dist1}.2/${dist2}.3/${dist3}.4/${dist4}`;
+
+        ldm =
+          `LDM\nBS${d.flightNoSuffix}/${formatDate(d.date, 'DDMON')}.${finalAcRegLdm}.${seatConfig}.${d.configure}\n` +
+          `-${dest}.${d.paxMale || '00'}/${d.paxFemale || '00'}/${d.paxChild || '00'}/${d.paxInfant || '00'}.T.${totalLoad}${distsMct}.PAX.00/${d.paxTotal || '000'}.PAD/0/0\n\n` +
+          `${dest} FRE 0 POS 0 BAG ${d.baggagePcs || '0'} PCS/${d.baggageWeight || '0'} KGS EQP 0 TRA 0\n` +
+          `${dest} FRE 0 POS 0 CGO ${d.cargoPcs || '0'} PCS/${d.cargoWeight || '0'} KGS  EQP 0 TRA 0\n\n`;
+
+        if (parseInt(d.maas, 10) > 0) siLines.push(`SI: MAAS ${String(d.maas).padStart(2, '0')}`);
+        if (wcSiString) siLines.push(wcSiString);
+        if (crewBagSiLine) siLines.push(crewBagSiLine);
+        if (comailSiLine) siLines.push(comailSiLine);
+        if (siLines.length > 0) ldm += `${siLines.join('\n')}\n`;
+        ldm += `\n\nEND\n\n\n${dynamicRegards}`;
         break;
       }
 
@@ -2392,29 +2562,31 @@ export const LoadControlModule: React.FC<Props> = ({
                   />
                 </div>
 
-                {/* TRIP TIME (USER INPUTS HERE TRIP TIME FROM DEPART TO DESTINATION) */}
-                <div className="flex flex-col">
-                  <label className="text-xs font-bold text-amber-300 mb-1 tracking-wider uppercase flex items-center justify-between">
-                    <span>TRIP TIME</span>
-                    <span className="text-[10px] text-amber-400/80 font-mono">E.G. 04:50</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="04:50"
-                    value={formData.tripTime}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const digits = val.replace(/\D/g, '').slice(0, 4);
-                      let formatted = digits;
-                      if (digits.length > 2) {
-                        formatted = `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
-                      }
-                      setFormData({ ...formData, tripTime: formatted });
-                    }}
-                    className="p-2 rounded bg-[#060d1a]/90 border border-amber-500/70 text-amber-300 font-black text-sm focus:outline-none focus:border-amber-400 font-mono shadow-[inset_0_0_8px_rgba(245,158,11,0.15)]"
-                    title="User will input here the trip time of depart station to destination station"
-                  />
-                </div>
+                {/* TRIP TIME (Only for Outstations, removed for DAC station) */}
+                {isOutstation && (
+                  <div className="flex flex-col">
+                    <label className="text-xs font-bold text-amber-300 mb-1 tracking-wider uppercase flex items-center justify-between">
+                      <span>TRIP TIME</span>
+                      <span className="text-[10px] text-amber-400/80 font-mono">E.G. 04:50</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="04:50"
+                      value={formData.tripTime}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const digits = val.replace(/\D/g, '').slice(0, 4);
+                        let formatted = digits;
+                        if (digits.length > 2) {
+                          formatted = `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+                        }
+                        setFormData({ ...formData, tripTime: formatted });
+                      }}
+                      className="p-2 rounded bg-[#060d1a]/90 border border-amber-500/70 text-amber-300 font-black text-sm focus:outline-none focus:border-amber-400 font-mono shadow-[inset_0_0_8px_rgba(245,158,11,0.15)]"
+                      title="User will input here the trip time of depart station to destination station"
+                    />
+                  </div>
+                )}
 
                 {/* PASSENGERS (M+F+C+I = TOTAL) */}
                 <div className="flex flex-col sm:col-span-2 lg:col-span-3">

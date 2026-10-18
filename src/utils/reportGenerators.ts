@@ -241,56 +241,68 @@ USBA-${(user.usbaId || 'N/A').toUpperCase()} II DAC APT II`;
     case 'SHJ':
     case 'DXB':
     case 'AUH': {
-      if (regLdm.includes('AL')) {
-        const bagComs = data.baggageComNo ? data.baggageComNo.split(',').map((s) => s.trim()) : [];
-        const cgoComs = data.cargoComNo ? data.cargoComNo.split(',').map((s) => s.trim()) : [];
+      const pad2 = (val: string | number) => {
+        const n = parseInt(String(val || 0), 10);
+        if (isNaN(n) || n === 0) return '00';
+        return n < 10 ? String(n).padStart(2, '0') : String(n);
+      };
+      const mStr = data.paxMale || '00';
+      const fStr = data.paxFemale || '00';
+      const cStr = pad2(data.paxChild);
+      const iStr = pad2(data.paxInfant);
 
-        const getCptLineAirbus = (cptNum: number) => {
-          const sNum = String(cptNum);
-          const hasBag = bagComs.includes(sNum);
-          const hasCgo = cgoComs.includes(sNum);
-          if (hasBag && hasCgo) return 'BAG+CGO BY';
-          if (hasBag) return 'BAG BY';
-          if (hasCgo) return 'CGO BY';
-          return 'NIL';
-        };
+      const holdDists = isAirbus
+        ? `1/${dist1}.2/${dist2}.3/${dist3}.4/${dist4}.5/${dist5}.`
+        : `1/${dist1}.2/${dist2}.3/${dist3}.4/${dist4}.`;
 
-        ldm = `LDM\nBS${data.flightNoSuffix}/${formatDate(data.date, 'DDMON')}.${regLdm}.${seatConfig}.${data.configure}\n` +
-          `-${destination}.${data.paxMale || '00'}/${data.paxFemale || '00'}/${data.paxChild || '00'}/${data.paxInfant || '00'}.T.${totalLoad}.1/${dist1}.2/${dist2}.3/${dist3}.4/${dist4}.5/${dist5}.PAX/0/${data.paxTotal || '000'}.PAD/0/0\n\n` +
-          `CPT1- ${getCptLineAirbus(1)}\n` +
-          `CPT2- ${getCptLineAirbus(2)}\n` +
-          `CPT3- ${getCptLineAirbus(3)}\n` +
-          `CPT4- ${getCptLineAirbus(4)}\n` +
-          `CPT5- ${getCptLineAirbus(5)}\n\n` +
-          `${destination} C     ${data.cargoPcs || '0'}/     ${data.cargoWeight || '0'} M     0 B     ${data.baggagePcs || '0'}/     ${data.baggageWeight || '0'} O     0 T       0\n`;
+      ldm = `LDM\nBS${data.flightNoSuffix}/${formatDate(data.date, 'DDMON')}.${regLdm}.${seatConfig}.${data.configure}\n` +
+        `-${destination}.${mStr}/${fStr}/${cStr}/${iStr}.T.${totalLoad}.${holdDists}PAX/0/${data.paxTotal || '0'}.PAD/0/0\n\n`;
+
+      const bComs = (data.baggageComNo || '').split(/[\s,+/]+/).map((s) => s.trim().toUpperCase());
+      const cComs = (data.cargoComNo || '').split(/[\s,+/]+/).map((s) => s.trim().toUpperCase());
+
+      const getCptLine = (cptNum: number, weight?: string) => {
+        const sNum = String(cptNum);
+        const hasBag = bComs.includes(sNum) || bComs.includes(`C${sNum}`) || bComs.includes(`CPT${sNum}`);
+        const hasCgo = cComs.includes(sNum) || cComs.includes(`C${sNum}`) || cComs.includes(`CPT${sNum}`);
+        if (hasBag && hasCgo) return `CPT${cptNum}- BAG+CGO BY`;
+        if (hasBag) return `CPT${cptNum}- BAG BY`;
+        if (hasCgo) return `CPT${cptNum}- CGO BY`;
+
+        const distVal = parseInt(weight || '0', 10);
+        if (distVal > 0) {
+          const hasAnyCgo = parseInt(data.cargoWeight || '0', 10) > 0;
+          const hasAnyBag = parseInt(data.baggageWeight || '0', 10) > 0;
+          if (hasAnyBag && hasAnyCgo) return `CPT${cptNum}- BAG+CGO BY`;
+          if (hasAnyBag) return `CPT${cptNum}- BAG BY`;
+          if (hasAnyCgo) return `CPT${cptNum}- CGO BY`;
+        }
+
+        return `CPT${cptNum}- NIL`;
+      };
+
+      const cptLines: string[] = [];
+      if (isAirbus) {
+        cptLines.push(getCptLine(1, dist1));
+        cptLines.push(getCptLine(2, dist2));
+        cptLines.push(getCptLine(3, dist3));
+        cptLines.push(getCptLine(4, dist4));
+        cptLines.push(getCptLine(5, dist5));
       } else {
-        const getCptLine = (cptNum: number, bComs: string[], cComs: string[]) => {
-          const hasBag = bComs.includes(String(cptNum));
-          const hasCgo = cComs.includes(String(cptNum));
-          let content = 'NIL';
-          if (hasBag && hasCgo) content = 'BAG+CGO BY';
-          else if (hasBag) content = 'BAG BY';
-          else if (hasCgo) content = 'CGO BY';
-          return `CPT${cptNum}- ${content}`;
-        };
-
-        const bComs = (data.baggageComNo || '').split(',').map((s) => s.trim());
-        const cComs = (data.cargoComNo || '').split(',').map((s) => s.trim());
-
-        ldm = `LDM\nBS${data.flightNoSuffix}/${formatDate(data.date, 'DDMON')}.${regLdm}.${seatConfig}.${data.configure}\n` +
-          `-${destination}.${data.paxMale || '00'}/${data.paxFemale || '00'}/${data.paxChild || '00'}/${data.paxInfant || '00'}.T.${totalLoad}.1/${dist1}.2/${dist2}.3/${dist3}.4/${dist4}.PAX/0/${data.paxTotal || '000'}.PAD/0/0\n\n` +
-          `${getCptLine(1, bComs, cComs)}\n` +
-          `${getCptLine(2, bComs, cComs)}\n` +
-          `${getCptLine(3, bComs, cComs)}\n` +
-          `${getCptLine(4, bComs, cComs)}\n\n` +
-          `${destination} C     ${data.cargoPcs || '0'}/     ${data.cargoWeight || '0'} M     0 B     ${data.baggagePcs || '0'}/     ${data.baggageWeight || '0'} O     0 T       0\n`;
+        cptLines.push(getCptLine(1, dist1));
+        cptLines.push(getCptLine(2, dist2));
+        cptLines.push(getCptLine(3, dist3));
+        cptLines.push(getCptLine(4, dist4));
       }
+      ldm += `${cptLines.join('\n')}\n\n`;
 
-      if (wcSiString) siLines.push(wcSiString);
-      if (crewBagSiLine) siLines.push(crewBagSiLine);
-      if (comailSiLine) siLines.push(comailSiLine);
-      if (siLines.length > 0) ldm += `${siLines.join('\n')}\n`;
-      ldm += `\n\n\nEND\n\n\n${dynamicRegards}`;
+      ldm += `${destination} C  ${data.cargoPcs || '0'}/  ${data.cargoWeight || '0'} M  0 B  ${data.baggagePcs || '0'}/  ${data.baggageWeight || '0'} O  0 T  0\n`;
+
+      if (crewBagSiLine) ldm += `${crewBagSiLine}\n`;
+      if (comailSiLine) ldm += `${comailSiLine}\n`;
+      if (wcSiString) ldm += `${wcSiString}\n`;
+
+      ldm += `\n\nEND\n\n\n${dynamicRegards}`;
       break;
     }
 
@@ -335,11 +347,11 @@ USBA-${(user.usbaId || 'N/A').toUpperCase()} II DAC APT II`;
         : `.1/${dist1}.2/${dist2}.3/${dist3}.4/${dist4}`;
 
       ldm = `LDM\nBS${data.flightNoSuffix}/${formatDate(data.date, 'DD')}.${regLdm}.${seatConfig}.${data.configure}\n` +
-        `-${destination}.${data.paxMale || '00'}/${data.paxFemale || '00'}/${data.paxChild || '00'}/${data.paxInfant || '00'}.T${totalLoad}${dists}.PAX/0/${data.paxTotal || '000'}.PAD/0/0\n`;
+        `-${destination}.${data.paxMale || '0'}/${data.paxFemale || '0'}/${data.paxChild || '0'}/${data.paxInfant || '0'}.T${totalLoad}${dists}.PAX/0/${data.paxTotal || '0'}.PAD/0/0\n`;
       if (wcStringRuh) {
         ldm += `${wcStringRuh}\n`;
       }
-      ldm += `SI ${destination} C     ${data.cargoPcs || '0'}/     ${data.cargoWeight || '0'} M     0    B     ${data.baggagePcs || '0'}/     ${data.baggageWeight || '0'} O     0 T     0\n`;
+      ldm += `SI ${destination} C  ${data.cargoPcs || '0'}/  ${data.cargoWeight || '0'} M  0 B  ${data.baggagePcs || '0'}/  ${data.baggageWeight || '0'} O  0 T  0\n`;
       if (crewBagSiLine) ldm += `${crewBagSiLine}\n`;
       if (comailSiLine) ldm += `${comailSiLine}\n`;
       ldm += `\nEND\n\n\n${dynamicRegards}`;
