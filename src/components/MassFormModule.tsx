@@ -19,6 +19,7 @@ import {
   FileText,
   Send,
   Navigation,
+  Search,
 } from 'lucide-react';
 
 interface MassHistoryItem {
@@ -33,6 +34,7 @@ interface MassHistoryItem {
   preparedBy?: string;
   usbaId?: string;
   designation?: string;
+  createdAt?: string;
 }
 
 interface MassPassenger {
@@ -124,6 +126,56 @@ export function formatMassDate(dateStr: string): string {
   const month = months[d.getMonth()];
   const year = String(d.getFullYear()).slice(-2);
   return `${day} ${month} ${year}`;
+}
+
+export function parseFlightDateToMs(dateStr: string | undefined): number {
+  if (!dateStr) return 0;
+  const clean = dateStr.trim();
+  // Case 1: YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    const t = new Date(clean + 'T00:00:00Z').getTime();
+    if (!isNaN(t)) return t;
+  }
+  // Case 2: DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    return Date.UTC(year, month, day);
+  }
+  // Case 3: DD MMM YY or DD MMM YYYY (e.g. "21 OCT 26" or "28 SEP 2026")
+  const mmmMatch = clean.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2,4})$/);
+  if (mmmMatch) {
+    const day = parseInt(mmmMatch[1], 10);
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const monthIdx = months.indexOf(mmmMatch[2].toUpperCase());
+    let year = parseInt(mmmMatch[3], 10);
+    if (year < 100) year += 2000;
+    if (monthIdx !== -1) {
+      return Date.UTC(year, monthIdx, day);
+    }
+  }
+  const fallback = new Date(clean).getTime();
+  return isNaN(fallback) ? 0 : fallback;
+}
+
+export function parseGenTimeToMs(createdAt: string | undefined, id: number | undefined): number {
+  if (createdAt) {
+    const t = new Date(createdAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (id && id > 1000000000) {
+    return id;
+  }
+  return 0;
+}
+
+export function formatMassGenTime(createdAt: string | undefined, id: number | undefined): string {
+  const ms = parseGenTimeToMs(createdAt, id);
+  if (!ms) return '';
+  const d = new Date(ms);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 export function parseMassFLST(text: string, selectedCategory: string): MassPassenger[] {
@@ -309,7 +361,7 @@ export const MassFormModule: React.FC<Props> = ({
   });
 
   const [cloudMassReports, setCloudMassReports] = useState<StoredMassReport[]>([]);
-
+  const [historySearch, setHistorySearch] = useState('');
   const [activeReportData, setActiveReportData] = useState<{
     dateInput: string;
     flightNoInput: string;
@@ -347,8 +399,42 @@ export const MassFormModule: React.FC<Props> = ({
         preparedBy: r.preparedBy,
         usbaId: r.usbaId,
         designation: r.designation,
+        createdAt: r.createdAt,
       };
+    })
+    .sort((a, b) => {
+      // 1. Primary: Flight Date descending (latest flight date first)
+      const dateA = parseFlightDateToMs(a.dateInput);
+      const dateB = parseFlightDateToMs(b.dateInput);
+      if (dateA !== dateB) {
+        return dateB - dateA;
+      }
+      // 2. Secondary: Generation Time descending (latest generated will show top)
+      const genA = parseGenTimeToMs(a.createdAt, a.id);
+      const genB = parseGenTimeToMs(b.createdAt, b.id);
+      if (genA !== genB) {
+        return genB - genA;
+      }
+      // 3. Fallback: ID descending
+      return (b.id || 0) - (a.id || 0);
     });
+
+  const displayedHistoryList = stationHistoryList.filter((item) => {
+    if (!historySearch.trim()) return true;
+    const q = historySearch.trim().toUpperCase();
+    const matchFlight =
+      `BS-${item.flightNoInput}`.toUpperCase().includes(q) ||
+      (item.flightNoInput || '').toUpperCase().includes(q);
+    const matchDest = (item.destInput || '').toUpperCase().includes(q);
+    const matchCat = (item.categoryInput || '').toUpperCase().includes(q);
+    const matchUser =
+      (item.preparedBy || '').toUpperCase().includes(q) ||
+      (item.usbaId || '').toUpperCase().includes(q);
+    const matchDate =
+      (item.dateInput || '').toUpperCase().includes(q) ||
+      formatMassDate(item.dateInput).toUpperCase().includes(q);
+    return matchFlight || matchDest || matchCat || matchUser || matchDate;
+  });
 
   // Sync draft inputs to localStorage
   useEffect(() => {
@@ -459,6 +545,7 @@ export const MassFormModule: React.FC<Props> = ({
       preparedBy: (userInfo.userName || 'OFFICER').toUpperCase(),
       usbaId: (userInfo.usbaId || '').toUpperCase(),
       designation: (designation || 'EXECUTIVE').toUpperCase(),
+      createdAt: new Date().toISOString(),
     };
 
     // Save MASS report to Cloud Firestore for 90 days (shared in real-time across the station) & log activity
@@ -764,15 +851,16 @@ export const MassFormModule: React.FC<Props> = ({
     return (
       <div className="flex-1 flex flex-col justify-center items-center p-4 md:p-8 min-h-screen relative">
         <div className="max-w-4xl w-full bg-slate-900/90 backdrop-blur-xl p-6 md:p-8 rounded-2xl border border-slate-700/70 border-t-4 border-t-sky-500 border-b-4 border-b-rose-500 shadow-2xl text-slate-200">
-          <div className="flex flex-col sm:flex-row justify-between items-center pb-4 mb-6 border-b border-slate-800 gap-3">
+          <div className="flex flex-col sm:flex-row justify-between items-center pb-4 mb-4 border-b border-slate-800 gap-3">
             <div>
               <h2 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase">
                 SAVED REPORTS HISTORY &mdash; STATION: <span className="text-amber-400">{currentStationCode}</span>
               </h2>
               <p className="text-[11px] font-sans text-slate-400 uppercase tracking-wider mt-0.5">
-                REAL-TIME SHARED STATION HISTORY ({stationHistoryList.length} REPORTS)
+                REAL-TIME SHARED STATION HISTORY ({stationHistoryList.length} REPORTS) &bull; SERIAL BY DATE &amp; LATEST GENERATE TOP
               </p>
             </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -801,10 +889,40 @@ export const MassFormModule: React.FC<Props> = ({
             </div>
           </div>
 
+          {/* Quick Search & Sort Filter Info */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
+            <div className="relative w-full sm:max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="SEARCH FLIGHT, DATE, CATEGORY, OR OFFICER..."
+                className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-800/90 border border-slate-700 text-xs text-white placeholder-slate-400 focus:border-amber-400 focus:outline-none font-sans uppercase"
+              />
+              {historySearch && (
+                <button
+                  type="button"
+                  onClick={() => setHistorySearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-bold"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+            <div className="text-[11px] text-amber-300 font-sans font-bold uppercase tracking-wider flex items-center gap-1.5 self-end sm:self-center">
+              <span>ORDER:</span>
+              <span className="text-emerald-400 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700 font-mono text-[10px]">
+                SERIAL BY DATE (LATEST GEN TOP)
+              </span>
+            </div>
+          </div>
+
           <div className="max-h-[420px] overflow-y-auto rounded-xl border border-slate-700 mb-6">
             <table className="w-full border-collapse text-xs md:text-sm uppercase">
               <thead>
-                <tr className="bg-slate-800 text-amber-300 border-b border-slate-700">
+                <tr className="bg-slate-800 text-amber-300 border-b border-slate-700 sticky top-0 z-10 shadow-sm">
+                  <th className="p-3 text-center font-bold">SL</th>
                   <th className="p-3 text-center font-bold">DATE</th>
                   <th className="p-3 text-center font-bold">FLIGHT NO</th>
                   <th className="p-3 text-center font-bold">CATEGORY</th>
@@ -813,28 +931,38 @@ export const MassFormModule: React.FC<Props> = ({
                 </tr>
               </thead>
               <tbody>
-                {stationHistoryList.length === 0 ? (
+                {displayedHistoryList.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-slate-400 font-bold">
-                      NO SAVED REPORTS FOUND FOR STATION {currentStationCode}.
+                    <td colSpan={6} className="p-6 text-center text-slate-400 font-bold">
+                      {historySearch
+                        ? 'NO MATCHING SAVED REPORTS FOUND.'
+                        : `NO SAVED REPORTS FOUND FOR STATION ${currentStationCode}.`}
                     </td>
                   </tr>
                 ) : (
-                  stationHistoryList.map((item) => (
+                  displayedHistoryList.map((item, idx) => (
                     <tr
                       key={item.docId || item.id}
                       className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors"
                     >
-                      <td className="p-3 text-center font-bold text-white">
-                        {formatMassDate(item.dateInput)}
+                      <td className="p-3 text-center font-mono font-bold text-slate-400 whitespace-nowrap">
+                        {String(idx + 1).padStart(2, '0')}
                       </td>
-                      <td className="p-3 text-center font-bold text-sky-300">
+                      <td className="p-3 text-center font-bold text-white whitespace-nowrap">
+                        <div className="font-mono text-white">{formatMassDate(item.dateInput)}</div>
+                        {formatMassGenTime(item.createdAt, item.id) && (
+                          <div className="text-[10px] text-amber-400 font-mono font-normal tracking-wide mt-0.5">
+                            GEN: {formatMassGenTime(item.createdAt, item.id)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-3 text-center font-bold text-sky-300 whitespace-nowrap">
                         BS-{item.flightNoInput} ({item.destInput})
                       </td>
-                      <td className="p-3 text-center font-bold text-amber-300">
+                      <td className="p-3 text-center font-bold text-amber-300 whitespace-nowrap">
                         {item.categoryInput || 'MAAS'}
                       </td>
-                      <td className="p-3 text-center font-bold text-indigo-300">
+                      <td className="p-3 text-center font-bold text-indigo-300 whitespace-nowrap">
                         {item.preparedBy || 'OFFICER'}
                         {item.usbaId && (
                           <span className="block text-[10px] text-slate-400 font-sans">

@@ -984,18 +984,28 @@ export default function App() {
   const currentStationUpper = currentStationCode;
 
   // All flights generated today for this station (combined: Load Control & Flight Data)
-  const allStationTodaySavedFlights = cloudFlightReports.filter((r) => {
-    const rStation = extractStationCode(r.station || 'DAC');
-    const routeStation = (r.route || '').trim().toUpperCase().split('-')[0];
-    const stationMatches = rStation === currentStationCode || routeStation === currentStationCode;
-    if (!stationMatches) return false;
-    const isTodayFlightDate = r.date === todayIsoDate || r.date === todayLocalDate;
-    const isCreatedToday =
-      r.createdAt &&
-      (r.createdAt.startsWith(todayIsoDate) ||
-        new Date(r.createdAt).toLocaleDateString('en-CA') === todayLocalDate);
-    return Boolean(isTodayFlightDate || isCreatedToday);
-  });
+  const allStationTodaySavedFlights = cloudFlightReports
+    .filter((r) => {
+      const rStation = extractStationCode(r.station || 'DAC');
+      const routeStation = (r.route || '').trim().toUpperCase().split('-')[0];
+      const stationMatches = rStation === currentStationCode || routeStation === currentStationCode;
+      if (!stationMatches) return false;
+      const isTodayFlightDate = r.date === todayIsoDate || r.date === todayLocalDate;
+      const isCreatedToday =
+        r.createdAt &&
+        (r.createdAt.startsWith(todayIsoDate) ||
+          new Date(r.createdAt).toLocaleDateString('en-CA') === todayLocalDate);
+      return Boolean(isTodayFlightDate || isCreatedToday);
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.date + 'T00:00:00Z').getTime() || 0;
+      const dateB = new Date(b.date + 'T00:00:00Z').getTime() || 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const genA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const genB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (genA !== genB) return genB - genA;
+      return (b.id || '').localeCompare(a.id || '');
+    });
 
   // Displayed flights in table based on origin:
   // 1. INSIDE 'FOR LOAD CONTROLLER' -> show only flights generated from Load Controller page
@@ -1806,7 +1816,12 @@ export default function App() {
                           {String(index + 1).padStart(2, '0')}
                         </td>
                         <td className="p-3.5 font-mono font-bold text-slate-200 whitespace-nowrap">
-                          {r.date}
+                          <div>{r.date}</div>
+                          {r.createdAt && (
+                            <div className="text-[10px] text-amber-400 font-normal tracking-wide mt-0.5">
+                              GEN: {new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </div>
+                          )}
                         </td>
                         <td className="p-3.5 font-black text-sky-300 whitespace-nowrap">
                           {r.flightNo}

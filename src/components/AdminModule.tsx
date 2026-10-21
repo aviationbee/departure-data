@@ -16,7 +16,13 @@ import {
   reconstructFormDataFromStoredReport,
   logUserActivity,
 } from '../firebase';
-import { formatMassDate, parseMassFLST } from './MassFormModule';
+import {
+  formatMassDate,
+  parseMassFLST,
+  parseFlightDateToMs,
+  parseGenTimeToMs,
+  formatMassGenTime,
+} from './MassFormModule';
 import {
   ShieldCheck,
   Lock,
@@ -779,6 +785,15 @@ export const AdminModule: React.FC<Props> = ({
         }
       }
       return true;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.date + 'T00:00:00Z').getTime() || 0;
+      const dateB = new Date(b.date + 'T00:00:00Z').getTime() || 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const genA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const genB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (genA !== genB) return genB - genA;
+      return (b.id || '').localeCompare(a.id || '');
     });
 
     const sfTotalFlights = filteredSavedFlights.length;
@@ -1325,6 +1340,15 @@ export const AdminModule: React.FC<Props> = ({
         if (!matchFlight && !matchDest && !matchCat && !matchUser && !matchDate) return false;
       }
       return true;
+    })
+    .sort((a, b) => {
+      const dateA = parseFlightDateToMs(a.dateInput);
+      const dateB = parseFlightDateToMs(b.dateInput);
+      if (dateA !== dateB) return dateB - dateA;
+      const genA = parseGenTimeToMs(a.createdAt, Number(a.id.split('_')[1]));
+      const genB = parseGenTimeToMs(b.createdAt, Number(b.id.split('_')[1]));
+      if (genA !== genB) return genB - genA;
+      return (b.id || '').localeCompare(a.id || '');
     });
 
     return (
@@ -1470,7 +1494,12 @@ export const AdminModule: React.FC<Props> = ({
                         </span>
                       </td>
                       <td className="p-3.5 text-center font-bold text-white whitespace-nowrap">
-                        {formatMassDate(m.dateInput)}
+                        <div className="font-mono">{formatMassDate(m.dateInput)}</div>
+                        {formatMassGenTime(m.createdAt, Number(m.id.split('_')[1])) && (
+                          <div className="text-[10px] text-amber-400 font-mono font-normal tracking-wide mt-0.5">
+                            GEN: {formatMassGenTime(m.createdAt, Number(m.id.split('_')[1]))}
+                          </div>
+                        )}
                       </td>
                       <td className="p-3.5 text-center font-black text-sky-300 whitespace-nowrap">
                         BS-{m.flightNoInput}
