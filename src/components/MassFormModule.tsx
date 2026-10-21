@@ -131,26 +131,40 @@ export function parseMassFLST(text: string, selectedCategory: string): MassPasse
   const lines = (text || '').toUpperCase().split(/\r?\n/);
   let currentPax: MassPassenger | null = null;
 
-  // DCS system / APIS lines (APP, DOCS, BAG, FOID, etc.) that do not belong to passenger list or remarks
+  // Technical DCS system / APIS transmission prefixes that must be skipped
   const DCS_SYSTEM_META_REGEX =
-    /^\s*(?:APP|DOCS|DOCO|DOCA|BAG|BAGG|FOID|FQTV|PCTC|CTCM|CTCE|EMER|SEAT|CHECKED|BOARDED|STCR|MEDA)\b/i;
+    /^\s*(?:APP|DOCS|DOCO|DOCA|FOID|FQTV|PCTC|CTCM|CTCE|EMER|SEAT|CHECKED|BOARDED|STCR|MEDA|INVOL|CKIN|NOSH)\b/i;
+
+  // Baggage or weight lines that MUST NEVER be treated as passenger rows
+  // Matches e.g. /65.00KG, 1/65.00KG, 65.00/30.00KG, BAG, BAGG, EXC 35KG, etc.
+  const BAGGAGE_LINE_REGEX =
+    /^\s*(?:\/?\d+(?:\.\d+)?\s*KG|\d+\/\d+(?:\.\d+)?\s*(?:KG)?|BAG|BAGG|XBAG|BAGS|BT|PCS|WT)\b/i;
 
   for (const rawLine of lines) {
-    if (!rawLine.trim()) continue;
+    const trimmedLine = rawLine.trim();
+    if (!trimmedLine) continue;
 
-    // 1. Skip technical DCS system transmissions (e.g. APP Country: SG..., DOCS P/..., BAG...)
+    // 1. Skip system transmission headers/trailers (e.g. APP Country: SG..., DOCS P/..., etc.)
     if (DCS_SYSTEM_META_REGEX.test(rawLine)) {
       continue;
     }
 
-    // 2. Check for SSR / Category lines (MAAS, WCHR, WCHC, WCHS, VIP, CIP)
-    const isCategoryLine = /^\s*(?:SSR\s+|OSI\s+)?(?:MAAS|WCHR|WCHC|WCHS|VIP|CIP)\b/i.test(rawLine);
+    // 2. Check for SSR / Category lines (MAAS, WCHR, WCHC, WCHS, VIP, CIP, or user-selected category)
+    const isCategoryLine =
+      /^\s*(?:SSR\s+|OSI\s+)?(?:MAAS|WCHR|WCHC|WCHS|VIP|CIP)\b/i.test(rawLine) ||
+      (selectedCategory &&
+        new RegExp('^\\s*(?:SSR\\s+|OSI\\s+)?' + selectedCategory + '\\b', 'i').test(rawLine));
+
     if (isCategoryLine) {
       if (currentPax) {
-        const trimmedLine = rawLine.trim();
-        const extracted = trimmedLine
+        let extracted = trimmedLine
           .replace(/^(?:SSR\s+|OSI\s+)?(?:MAAS|WCHR|WCHC|WCHS|VIP|CIP)\s*[:\-]?\s*/i, '')
           .trim();
+        if (selectedCategory) {
+          extracted = extracted
+            .replace(new RegExp('^' + selectedCategory + '\\s*[:\\-]?\\s*', 'i'), '')
+            .trim();
+        }
         if (extracted) {
           currentPax.remarks = currentPax.remarks
             ? `${currentPax.remarks} ${extracted}`.trim()
@@ -160,43 +174,55 @@ export function parseMassFLST(text: string, selectedCategory: string): MassPasse
       continue;
     }
 
-    // 3. Check if line is a main passenger row
-    const hasPassengerName = /[A-Z0-9\-\']+\/[A-Z0-9\-\']+/i.test(rawLine);
-    const looksLikeMainPaxLine =
-      hasPassengerName &&
-      (/^\s*\d+\s+/i.test(rawLine) ||
-        /(?:ETKT|TKNE|\d{10,})/i.test(rawLine) ||
-        /\b[A-Z0-9]{5,8}\/[A-Z0-9]{2}/i.test(rawLine) ||
-        /\d+\.\d+\s*KG/i.test(rawLine) ||
-        /EXC\s+\d+/i.test(rawLine));
+    // 3. Reject baggage lines, weight lines, or ticket sub-lines so they NEVER create bogus passenger rows
+    if (
+      BAGGAGE_LINE_REGEX.test(trimmedLine) ||
+      trimmedLine.startsWith('/') ||
+      /^\d+\.\d+\s*KG/i.test(trimmedLine) ||
+      /^\d+\/\d+\.\d+/i.test(trimmedLine)
+    ) {
+      // If the current passenger doesn't have seat recorded yet, check if excess baggage or line contains seat
+      if (currentPax && !currentPax.seat) {
+        const seatAfterExc = rawLine.match(/EXC\s+\d+(?:\.\d+)?\s*KG\s+([0-9]{1,3}[A-K])\b/i);
+        if (seatAfterExc) {
+          currentPax.seat = seatAfterExc[1].toUpperCase();
+        }
+      }
+      continue;
+    }
 
-    if (looksLikeMainPaxLine) {
+    // 4. Test if line is a valid passenger row:
+    // Strip leading check-in sequence digits (e.g. "1  114 " -> "CRAM/PATRICK  MR...")
+    const afterLeadingNums = rawLine.replace(/^\s*(?:\d+\s+)+/, '').trim();
+
+    // A passenger surname MUST start with at least 2 alphabet characters followed by a slash and given name
+    const paxNameMatch = afterLeadingNums.match(
+      /^([A-Z]{2,}(?:[\s\-][A-Z]{2,})*)\s*\/\s*([A-Z]{2,}(?:[\s\-][A-Z0-9]+)*)/i
+    );
+
+    if (paxNameMatch) {
       if (currentPax && currentPax.name) {
         paxList.push(currentPax);
       }
 
-      // Strip ALL leading sequence numbers and check-in numbers (e.g. "1  114 " -> "CRAM/PATRICK  MR...")
-      const afterNumbers = rawLine.replace(/^\s*(?:\d+\s+)+/, '').trim();
-
-      // Extract Passenger Name cleanly before ETKT / TKNE / 10+ digit ticket number or 3+ spaces
-      let paxName = afterNumbers;
-      const nameSplit = afterNumbers.split(/\s+(?=ETKT|TKNE|\d{10,})/i);
+      // Extract full passenger name cleanly before ETKT, TKNE, 10+ digit ticket numbers, or large gaps
+      let paxName = afterLeadingNums;
+      const nameSplit = afterLeadingNums.split(/\s+(?=ETKT|TKNE|\d{10,})/i);
       if (nameSplit.length > 1) {
         paxName = nameSplit[0].trim();
       } else {
-        const multiSpaceSplit = afterNumbers.split(/\s{3,}/);
+        const multiSpaceSplit = afterLeadingNums.split(/\s{3,}/);
         paxName = multiSpaceSplit[0].trim();
       }
-      // Strip any residual leading digits or excessive spaces
+      // Remove any residual leading digits or multiple spaces
       paxName = paxName.replace(/^[\d\s]+/, '').replace(/\s{3,}/g, ' ').trim();
 
-      // Extract Seat Number accurately (e.g. Exc 0kg 2D, or standalone seat number)
+      // Extract Seat Number
       let seat = '';
       const seatAfterExc = rawLine.match(/EXC\s+\d+(?:\.\d+)?\s*KG\s+([0-9]{1,3}[A-K])\b/i);
       if (seatAfterExc) {
         seat = seatAfterExc[1].toUpperCase();
       } else {
-        // Strip PNR slash blocks (e.g. 0AEHN5/1B/BS) and ticket numbers before searching for seat
         const cleanedForSeat = rawLine
           .replace(/\b[A-Z0-9]{5,8}\/[A-Z0-9]{2}(?:\/[A-Z0-9]{2})?\b/gi, ' ')
           .replace(/\b(?:ETKT|TKNE)[A-Z0-9]+\b/gi, ' ')
@@ -213,23 +239,34 @@ export function parseMassFLST(text: string, selectedCategory: string): MassPasse
         remarks: '',
       };
     } else if (currentPax) {
-      const trimmedLine = rawLine.trim();
+      // Continuation lines: unclassified remarks or wrapped remark lines
       if (trimmedLine.includes('MAAS')) {
         const extracted = trimmedLine.replace(/^.*?\bMAAS\s*[:\-]?\s*/i, '').trim();
         if (extracted) {
-          currentPax.remarks = currentPax.remarks ? `${currentPax.remarks} ${extracted}`.trim() : extracted;
+          currentPax.remarks = currentPax.remarks
+            ? `${currentPax.remarks} ${extracted}`.trim()
+            : extracted;
         }
       } else if (trimmedLine.includes('WCHR')) {
         const extracted = trimmedLine.replace(/^.*?\bWCHR\s*[:\-]?\s*/i, '').trim();
         if (extracted) {
-          currentPax.remarks = currentPax.remarks ? `${currentPax.remarks} ${extracted}`.trim() : extracted;
+          currentPax.remarks = currentPax.remarks
+            ? `${currentPax.remarks} ${extracted}`.trim()
+            : extracted;
         }
       } else if (selectedCategory && trimmedLine.includes(selectedCategory)) {
-        const extracted = trimmedLine.replace(new RegExp(`^.*?\\b${selectedCategory}\\s*[:\\-]?\\s*`, 'i'), '').trim();
+        const extracted = trimmedLine
+          .replace(new RegExp('^.*?\\b' + selectedCategory + '\\s*[:\\-]?\\s*', 'i'), '')
+          .trim();
         if (extracted) {
-          currentPax.remarks = currentPax.remarks ? `${currentPax.remarks} ${extracted}`.trim() : extracted;
+          currentPax.remarks = currentPax.remarks
+            ? `${currentPax.remarks} ${extracted}`.trim()
+            : extracted;
         }
-      } else if (currentPax.remarks) {
+      } else if (
+        currentPax.remarks &&
+        !trimmedLine.match(/^(?:CAN|DAC|CGP|BKK|SIN|KUL|DXB|AUH|SHJ|RUH|JED|SPD|ZYL|CXB|JSR|RJH|BZL)\b/)
+      ) {
         currentPax.remarks = `${currentPax.remarks} ${trimmedLine}`.trim();
       }
     }
