@@ -331,6 +331,14 @@ export function parseMassFLST(text: string, selectedCategory: string): MassPasse
   return paxList;
 }
 
+export const getTodayDate = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const MassFormModule: React.FC<Props> = ({
   currentPage,
   setCurrentPage,
@@ -344,21 +352,11 @@ export const MassFormModule: React.FC<Props> = ({
     return localStorage.getItem('massApp_designation') || 'EXECUTIVE';
   });
 
-  const [flightDate, setFlightDate] = useState<string>(() => {
-    return localStorage.getItem('massApp_flight-date') || new Date().toISOString().split('T')[0];
-  });
-  const [flightNo, setFlightNo] = useState<string>(() => {
-    return localStorage.getItem('massApp_flight-no') || '';
-  });
-  const [flightDest, setFlightDest] = useState<string>(() => {
-    return localStorage.getItem('massApp_flight-dest') || 'BKK';
-  });
-  const [flightCategory, setFlightCategory] = useState<string>(() => {
-    return localStorage.getItem('massApp_flight-category') || 'MAAS';
-  });
-  const [flstData, setFlstData] = useState<string>(() => {
-    return localStorage.getItem('massApp_flst-data') || '';
-  });
+  const [flightDate, setFlightDate] = useState<string>(getTodayDate);
+  const [flightNo, setFlightNo] = useState<string>('');
+  const [flightDest, setFlightDest] = useState<string>('BKK');
+  const [flightCategory, setFlightCategory] = useState<string>('MAAS');
+  const [flstData, setFlstData] = useState<string>('');
 
   const [cloudMassReports, setCloudMassReports] = useState<StoredMassReport[]>([]);
   const [historySearch, setHistorySearch] = useState('');
@@ -371,6 +369,33 @@ export const MassFormModule: React.FC<Props> = ({
     preparedBy?: string;
     designation?: string;
   } | null>(null);
+
+  // Auto-redirect if already logged into MAAS (persists session till user clicks LOG OUT)
+  useEffect(() => {
+    if (currentPage === 'mass-login') {
+      const isMassLoggedIn = localStorage.getItem('massApp_isLoggedIn') === 'true';
+      if (isMassLoggedIn) {
+        setCurrentPage('mass-dashboard');
+      }
+    }
+  }, [currentPage, setCurrentPage]);
+
+  // When user comes to MAAS form dashboard (data input page), ALWAYS present a fresh page with no previous data and Date = TODAY
+  useEffect(() => {
+    if (currentPage === 'mass-dashboard') {
+      localStorage.removeItem('massApp_flight-date');
+      localStorage.removeItem('massApp_flight-no');
+      localStorage.removeItem('massApp_flight-dest');
+      localStorage.removeItem('massApp_flight-category');
+      localStorage.removeItem('massApp_flst-data');
+
+      setFlightDate(getTodayDate());
+      setFlightNo('');
+      setFlightDest('BKK');
+      setFlightCategory('MAAS');
+      setFlstData('');
+    }
+  }, [currentPage]);
 
   // Real-time subscription to MASS Reports for the logged-in station
   useEffect(() => {
@@ -436,26 +461,7 @@ export const MassFormModule: React.FC<Props> = ({
     return matchFlight || matchDest || matchCat || matchUser || matchDate;
   });
 
-  // Sync draft inputs to localStorage
-  useEffect(() => {
-    localStorage.setItem('massApp_flight-date', flightDate);
-  }, [flightDate]);
 
-  useEffect(() => {
-    localStorage.setItem('massApp_flight-no', flightNo);
-  }, [flightNo]);
-
-  useEffect(() => {
-    localStorage.setItem('massApp_flight-dest', flightDest);
-  }, [flightDest]);
-
-  useEffect(() => {
-    localStorage.setItem('massApp_flight-category', flightCategory);
-  }, [flightCategory]);
-
-  useEffect(() => {
-    localStorage.setItem('massApp_flst-data', flstData);
-  }, [flstData]);
 
   // Handle Flight Number change + Auto-Fill Destination
   const handleFlightNoChange = (val: string) => {
@@ -474,28 +480,37 @@ export const MassFormModule: React.FC<Props> = ({
     }
   };
 
-  // Handle MASS Login (Designation selection only, since User Name, USBA ID, and Station are already set)
+  // Handle MASS Login (Designation selection only, persists login till user explicitly clicks LOG OUT)
   const handleMassLogin = () => {
     const cleanDesig = (designation || 'EXECUTIVE').toUpperCase();
     setDesignation(cleanDesig);
     localStorage.setItem('massApp_designation', cleanDesig);
+    localStorage.setItem('massApp_isLoggedIn', 'true');
     showToast('WELCOME OFFICER');
+    setFlightDate(getTodayDate());
+    setFlightNo('');
+    setFlightDest('BKK');
+    setFlightCategory('MAAS');
+    setFlstData('');
     setCurrentPage('mass-dashboard');
   };
 
-  // Handle MASS Logout (direct logout to Login page)
+  // Handle MASS Logout (logs out of MAAS form, clears MAAS session, and redirects to mass-login)
   const handleMassLogout = () => {
+    localStorage.removeItem('massApp_isLoggedIn');
     localStorage.removeItem('massApp_designation');
     localStorage.removeItem('massApp_flight-date');
     localStorage.removeItem('massApp_flight-no');
     localStorage.removeItem('massApp_flight-dest');
     localStorage.removeItem('massApp_flight-category');
     localStorage.removeItem('massApp_flst-data');
+    setDesignation('EXECUTIVE');
     setFlightNo('');
     setFlightCategory('MAAS');
     setFlstData('');
-    setFlightDate(new Date().toISOString().split('T')[0]);
-    onLogout();
+    setFlightDate(getTodayDate());
+    setCurrentPage('mass-login');
+    showToast('LOGGED OUT FROM MAAS FORM');
   };
 
   // Generate / Save MASS Report
@@ -565,6 +580,14 @@ export const MassFormModule: React.FC<Props> = ({
       preparedBy: (userInfo.userName || 'OFFICER').toUpperCase(),
       designation: (designation || 'EXECUTIVE').toUpperCase(),
     });
+
+    // Reset inputs fresh so returning to mass-dashboard is clean for the next flight
+    setFlightDate(getTodayDate());
+    setFlightNo('');
+    setFlightDest('BKK');
+    setFlightCategory('MAAS');
+    setFlstData('');
+
     setCurrentPage('mass-report');
   };
 
@@ -600,7 +623,7 @@ export const MassFormModule: React.FC<Props> = ({
             </button>
             <button
               type="button"
-              onClick={handleMassLogout}
+              onClick={onLogout}
               className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all uppercase"
             >
               <LogOut className="w-3.5 h-3.5" />

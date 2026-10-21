@@ -351,7 +351,7 @@ export default function App() {
     } else if (currentPage === 'mass-report' || currentPage === 'mass-history') {
       setCurrentPage('mass-dashboard');
     } else if (currentPage === 'mass-dashboard') {
-      setCurrentPage('mass-login');
+      setCurrentPage('welcome');
     } else if (
       currentPage === 'admin-logs' ||
       currentPage === 'admin-saved-flight' ||
@@ -377,6 +377,13 @@ export default function App() {
     localStorage.removeItem('usba_last_activity');
     sessionStorage.removeItem('usba_admin_role');
     sessionStorage.removeItem('usba_admin_station');
+    localStorage.removeItem('massApp_isLoggedIn');
+    localStorage.removeItem('massApp_designation');
+    localStorage.removeItem('massApp_flight-date');
+    localStorage.removeItem('massApp_flight-no');
+    localStorage.removeItem('massApp_flight-dest');
+    localStorage.removeItem('massApp_flight-category');
+    localStorage.removeItem('massApp_flst-data');
     setPageHistory([]);
     setUserInfo({ userName: '', usbaId: '', stationName: 'DAC' });
     setFormData(INITIAL_FORM_DATA);
@@ -1646,7 +1653,10 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => navigateToPage('mass-login')}
+                onClick={() => {
+                  const isMassLoggedIn = localStorage.getItem('massApp_isLoggedIn') === 'true';
+                  navigateToPage(isMassLoggedIn ? 'mass-dashboard' : 'mass-login');
+                }}
                 className="py-4 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-500 hover:to-purple-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-purple-400/30 flex items-center justify-center gap-3 cursor-pointer uppercase"
               >
                 <FileText className="w-5 h-5 text-purple-200" />
