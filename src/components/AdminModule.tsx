@@ -17,6 +17,10 @@ import {
   logUserActivity,
 } from '../firebase';
 import {
+  exportStandardFlightReportsXlsx,
+  exportActivityLogsXlsx,
+} from '../utils/excelExport';
+import {
   formatMassDate,
   parseMassFLST,
   parseFlightDateToMs,
@@ -251,7 +255,7 @@ export const AdminModule: React.FC<Props> = ({
     0
   );
 
-  // Download Flight Reports as Excel (.CSV with UTF-8 BOM)
+  // Download Flight Reports as Excel (.XLSX)
   const handleDownloadExcel = (
     customReports?: StoredFlightReport[],
     customLabel?: string
@@ -262,223 +266,23 @@ export const AdminModule: React.FC<Props> = ({
       return;
     }
 
-    const headers = [
-      'DATE',
-      'STATION',
-      'FLIGHT NO',
-      'ROUTE',
-      'A/C REG',
-      'A/C TYPE',
-      'CAPTAIN',
-      'CREW CONFIG',
-      'STA',
-      'C/ON',
-      'DOOR OPEN',
-      'ARRIVAL STATUS',
-      'ARR FLIGHT NO',
-      'ARR ROUTE',
-      'ARR PAX RECEIVING',
-      'ARR PAX ADULT',
-      'ARR PAX INFANT',
-      'ARR BAG WEIGHT (KG)',
-      'ARR BAG PCS',
-      'ARR CARGO WEIGHT (KG)',
-      'ARR CARGO PCS',
-      'ARR MAIL',
-      'ARR VIP',
-      'ARR CIP',
-      'ARR MAAS',
-      'ARR REMARKS',
-      'STD',
-      'DOOR CLOSED',
-      'C/OFF',
-      'AIRBORNE',
-      'DEPARTURE STATUS',
-      'DELAY REASON',
-      'FLIGHT LOAD',
-      'FUEL (KG)',
-      'PAX MALE',
-      'PAX FEMALE',
-      'PAX CHILD',
-      'PAX INFANT',
-      'TOTAL PAX',
-      'BAG WEIGHT (KG)',
-      'BAG PCS',
-      'BAG COM NO',
-      'CARGO WEIGHT (KG)',
-      'CARGO PCS',
-      'CARGO COM NO',
-      'CREW BAG WEIGHT (KG)',
-      'CREW BAG PCS',
-      'CREW BAG COM NO',
-      'MAIL',
-      'COUNTER NOSHOW',
-      'NOSHOW PNR',
-      'GATE NOSHOW',
-      'SELF OFFLOAD',
-      'VIP',
-      'CIP',
-      'MAAS',
-      'WCHR (SEAT)',
-      'WCHC (SEAT)',
-      'UM PAX (SEAT)',
-      'FIRE ARMS (SEAT)',
-      'LOAD CONTROLLER',
-      'RAMP OFFICER',
-      'CHECK IN STAFF',
-      'PAX HANDLING',
-      'REMARKS',
-      'REPORT BY',
-      'USBA ID',
-      'SAVED AT',
-    ];
-
-    const escapeCsv = (val: string | number | undefined) => {
-      const raw = String(val ?? '');
-      if (raw.startsWith('="') && raw.endsWith('"')) {
-        const inner = raw.slice(2, -1).replace(/"/g, '""');
-        return `="${inner}"`;
-      }
-      const str = raw.replace(/"/g, '""');
-      return `"${str}"`;
-    };
-
-    // Force Excel to treat CREW CONFIG (e.g. 2/2, 2/5) as Text instead of converting to Date (2-Feb)
-    const toExcelTextMode = (val: string | undefined) => {
-      const clean = String(val ?? '').trim();
-      return clean ? `="${clean}"` : '';
-    };
-
-    const rows = targetReports.map((r) => {
-      const raw = r.rawFormData;
-      return [
-        r.date,
-        r.station,
-        r.flightNo,
-        r.route,
-        r.acReg,
-        r.acType,
-        r.captain,
-        toExcelTextMode(r.configure),
-        r.sta || raw?.sta || '',
-        r.chocksOn || raw?.chocksOn || '',
-        r.doorOpen || raw?.doorOpen || '',
-        r.arrivalStatus || raw?.arrivalStatus || '',
-        raw?.arrFlightNo || '',
-        raw?.arrRoute || '',
-        raw?.arrPaxReceiving || '',
-        raw?.arrPaxAdult || '',
-        raw?.arrPaxInfant || '',
-        raw?.arrBaggageWeight || '',
-        raw?.arrBaggagePcs || '',
-        raw?.arrCargoWeight || '',
-        raw?.arrCargoPcs || '',
-        raw?.arrMail || '',
-        raw?.arrVip || '',
-        raw?.arrCip || '',
-        raw?.arrMaas || '',
-        raw?.arrRemarks || '',
-        r.std,
-        r.doorClosed,
-        r.chocksOff,
-        r.airborne,
-        r.departureStatus,
-        r.delayReason,
-        r.flightLoad,
-        r.fuelUplift,
-        r.paxMale,
-        r.paxFemale,
-        r.paxChild,
-        r.paxInfant,
-        r.paxTotal,
-        r.baggageWeight,
-        r.baggagePcs,
-        raw?.baggageComNo || '',
-        r.cargoWeight,
-        r.cargoPcs,
-        raw?.cargoComNo || '',
-        raw?.crewBagWeight || '',
-        raw?.crewBagPcs || '',
-        raw?.crewBagComNo || '',
-        r.mail,
-        r.counterNoshow,
-        r.noshowPnr,
-        r.gateNoShow,
-        r.selfOffload,
-        r.vip,
-        r.cip,
-        r.maas,
-        r.wchrSeat ? `${r.wchrFig} (${r.wchrSeat})` : r.wchrFig,
-        r.wchcSeat ? `${r.wchcFig} (${r.wchcSeat})` : r.wchcFig,
-        r.umPaxSeat ? `${r.umPax} (${r.umPaxSeat})` : r.umPax,
-        r.fireArmsSeat ? `${r.fireArms} (${r.fireArmsSeat})` : r.fireArms,
-        r.loadController,
-        r.rampOfficer,
-        r.checkInStaff,
-        r.paxHandling || raw?.paxHandling || '',
-        r.remarks,
-        r.preparedBy,
-        `USBA-${r.usbaId}`,
-        new Date(r.createdAt).toLocaleString(),
-      ];
-    });
-
-    const csvContent =
-      '\uFEFF' +
-      [headers.map(escapeCsv).join(','), ...rows.map((row) => row.map(escapeCsv).join(','))].join(
-        '\r\n'
-      );
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
     const stLabel =
       customLabel ?? (adminRole === 'super' ? selectedStationFilter : authorizedStation);
     const dtLabel = showAllDates ? '90DAYS' : selectedDate;
-    link.href = url;
-    link.setAttribute('download', `USBA_FLIGHT_REPORT_${stLabel}_${dtLabel}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast('EXCEL (.CSV) DOWNLOADED SUCCESSFULLY!');
+    const fileName = `USBA_FLIGHT_REPORT_${stLabel}_${dtLabel}.xlsx`;
+    exportStandardFlightReportsXlsx(targetReports, fileName);
+    showToast(`EXCEL (.XLSX) DOWNLOADED: ${fileName}`);
   };
 
-  // Download Activity Logs as Excel
+  // Download Activity Logs as Excel (.XLSX)
   const handleDownloadLogsExcel = (logsToExport: ActivityLogEntry[]) => {
     if (logsToExport.length === 0) {
       showToast('NO LOGS TO DOWNLOAD!');
       return;
     }
-    const headers = ['DATE & TIME', 'STATION', 'USER NAME', 'USBA ID', 'ACTIVITY / ACTION', 'DETAILS'];
-    const escapeCsv = (val: string | number | undefined) =>
-      `"${String(val ?? '').replace(/"/g, '""')}"`;
-
-    const rows = logsToExport.map((l) => [
-      new Date(l.timestamp || l.createdAt).toLocaleString(),
-      l.station,
-      l.userName,
-      `USBA-${l.usbaId}`,
-      l.action,
-      l.details,
-    ]);
-
-    const csvContent =
-      '\uFEFF' +
-      [headers.map(escapeCsv).join(','), ...rows.map((r) => r.map(escapeCsv).join(','))].join(
-        '\r\n'
-      );
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `USBA_ACTIVITY_LOGS_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast('ACTIVITY LOGS EXCEL DOWNLOADED!');
+    const fileName = `USBA_ACTIVITY_LOGS_${new Date().toISOString().split('T')[0]}.xlsx`;
+    exportActivityLogsXlsx(logsToExport, fileName);
+    showToast(`ACTIVITY LOGS EXCEL (.XLSX) DOWNLOADED: ${fileName}`);
   };
 
   const handleCirculateNotice = async () => {
