@@ -1311,10 +1311,10 @@ export default function App() {
                   type="button"
                   onClick={handleDownloadStationSavedExcel}
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all"
-                  title="Downloads all flight data together (both Load Control and Flight Data)"
+                  title="Downloads all flight data together as Microsoft Excel (.xlsx)"
                 >
                   <Download className="w-4 h-4" />
-                  <span>DOWNLOAD EXCEL (ALL FLIGHTS: {allStationTodaySavedFlights.length})</span>
+                  <span>DOWNLOAD EXCEL (.XLSX) ({allStationTodaySavedFlights.length})</span>
                 </button>
 
                 <button

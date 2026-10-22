@@ -60,14 +60,18 @@ async function checkAndApplyLiveUpdatesRealtime() {
       if (vRes.ok) {
         const vData = await vRes.json();
         const serverVersion = String(vData?.version || vData?.buildTime || '');
-        const savedVersion = sessionStorage.getItem(RUNTIME_BUILD_KEY);
+        const savedSession = sessionStorage.getItem(RUNTIME_BUILD_KEY);
+        const savedLocal = localStorage.getItem(RUNTIME_BUILD_KEY);
+        const savedVersion = savedSession || savedLocal;
 
-        if (!savedVersion) {
+        if (serverVersion && savedVersion && savedVersion !== serverVersion) {
           sessionStorage.setItem(RUNTIME_BUILD_KEY, serverVersion);
-        } else if (serverVersion && savedVersion !== serverVersion) {
-          sessionStorage.setItem(RUNTIME_BUILD_KEY, serverVersion);
+          localStorage.setItem(RUNTIME_BUILD_KEY, serverVersion);
           hasNewUpdate = true;
           targetParam = `_v=${encodeURIComponent(serverVersion)}&_t=${timestamp}`;
+        } else if (serverVersion) {
+          sessionStorage.setItem(RUNTIME_BUILD_KEY, serverVersion);
+          localStorage.setItem(RUNTIME_BUILD_KEY, serverVersion);
         }
       }
     } catch {
