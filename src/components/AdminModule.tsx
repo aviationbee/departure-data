@@ -268,7 +268,7 @@ export const AdminModule: React.FC<Props> = ({
 
     const stLabel =
       customLabel ?? (adminRole === 'super' ? selectedStationFilter : authorizedStation);
-    const dtLabel = showAllDates ? '90DAYS' : selectedDate;
+    const dtLabel = showAllDates ? '15DAYS' : selectedDate;
     const fileName = `USBA_FLIGHT_REPORT_${stLabel}_${dtLabel}.xlsx`;
     exportStandardFlightReportsXlsx(targetReports, fileName);
     showToast(`EXCEL (.XLSX) DOWNLOADED: ${fileName}`);
@@ -1378,7 +1378,7 @@ export const AdminModule: React.FC<Props> = ({
             </div>
             <h1 className="text-xl md:text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
               <Plane className="w-6 h-6 text-amber-400" />
-              <span>FULL DAY FLIGHT DATA REPORT (90-DAY CLOUD ARCHIVE)</span>
+              <span>FULL DAY FLIGHT DATA REPORT (15-DAY CLOUD ARCHIVE)</span>
             </h1>
             <p className="text-xs text-slate-400 font-sans mt-0.5 uppercase tracking-wider">
               GOOGLE CLOUD RUN (ASIA-SOUTHEAST1) &bull; GOOGLE CLOUD FIRESTORE REAL-TIME DATABASE
@@ -1535,7 +1535,7 @@ export const AdminModule: React.FC<Props> = ({
                     : 'bg-slate-900 text-slate-300 border-slate-600 hover:bg-slate-800'
                 }`}
               >
-                {showAllDates ? 'SINGLE DAY' : 'ALL 90 DAYS'}
+                {showAllDates ? 'SINGLE DAY' : 'ALL 15 DAYS'}
               </button>
             </div>
           </div>
@@ -1646,7 +1646,7 @@ export const AdminModule: React.FC<Props> = ({
                 <tr>
                   <td colSpan={13} className="p-8 text-center text-slate-400 font-bold">
                     NO FLIGHT DATA REPORTS FOUND FOR{' '}
-                    {showAllDates ? 'THE LAST 90 DAYS' : selectedDate}.
+                    {showAllDates ? 'THE LAST 15 DAYS' : selectedDate}.
                   </td>
                 </tr>
               ) : (

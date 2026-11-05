@@ -42,6 +42,9 @@ import {
   reconstructFormDataFromStoredReport,
   deleteFlightReportFromCloud,
   isLoadControlReport,
+  exportStationBackupJson,
+  restoreStationBackupJson,
+  getCachedFlightReports,
   StoredFlightReport,
   SystemNoticeDoc,
 } from './firebase';
@@ -68,6 +71,9 @@ import {
   FolderOpen,
   Eye,
   Download,
+  Upload,
+  HardDrive,
+  Calendar,
   Edit3,
   Sliders,
   Trash2,
@@ -266,6 +272,8 @@ export default function App() {
   const [loadControlEditReport, setLoadControlEditReport] = useState<StoredFlightReport | null>(null);
   const [loadControlViewMode, setLoadControlViewMode] = useState<'input' | 'dual-report'>('input');
   const [flightToRemove, setFlightToRemove] = useState<StoredFlightReport | null>(null);
+  const [showAllDatesInSavedFlights, setShowAllDatesInSavedFlights] = useState(false);
+  const backupFileInputRef = React.useRef<HTMLInputElement>(null);
   const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
   });
@@ -404,36 +412,11 @@ export default function App() {
       setCloudFlightReports(reports);
     });
 
-    // Trigger immediate sync on mount
-    syncRealtimeDataOnActivity(true);
-
-    // Sync whenever user performs any activity in the app
-    const handleUserActivitySync = () => {
-      syncRealtimeDataOnActivity(false);
-    };
-
-    const activityEvents = ['click', 'keydown', 'touchstart', 'focus', 'visibilitychange'];
-    activityEvents.forEach((ev) =>
-      window.addEventListener(ev, handleUserActivitySync, { passive: true })
-    );
-
-    // Continuous 4-second background heartbeat sync
-    const syncTimer = window.setInterval(() => {
-      syncRealtimeDataOnActivity(false);
-    }, 4000);
-
     return () => {
       unsub();
       unsubFlights();
-      activityEvents.forEach((ev) => window.removeEventListener(ev, handleUserActivitySync));
-      window.clearInterval(syncTimer);
     };
   }, []);
-
-  // Also force real-time sync whenever user switches pages inside the app
-  useEffect(() => {
-    syncRealtimeDataOnActivity(true);
-  }, [currentPage]);
 
   // 2-Hour Inactivity Auto-Logout (7,200,000 ms)
   useEffect(() => {
@@ -1001,7 +984,10 @@ export default function App() {
       const routeStation = (r.route || '').trim().toUpperCase().split('-')[0];
       const stationMatches = rStation === currentStationCode || routeStation === currentStationCode;
       if (!stationMatches) return false;
-      const isTodayFlightDate = r.date === todayIsoDate || r.date === todayLocalDate;
+      const isTodayFlightDate =
+        r.date === todayIsoDate ||
+        r.date === todayLocalDate ||
+        (r.date && (r.date.includes(todayIsoDate) || r.date.includes(todayLocalDate)));
       const isCreatedToday =
         r.createdAt &&
         (r.createdAt.startsWith(todayIsoDate) ||
@@ -1018,15 +1004,66 @@ export default function App() {
       return (b.id || '').localeCompare(a.id || '');
     });
 
+  // All flights across all dates for this station (preserved in local cache and Firestore for 90 days)
+  const allStationEverSavedFlights = cloudFlightReports
+    .filter((r) => {
+      const rStation = extractStationCode(r.station || 'DAC');
+      const routeStation = (r.route || '').trim().toUpperCase().split('-')[0];
+      return rStation === currentStationCode || routeStation === currentStationCode;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.date + 'T00:00:00Z').getTime() || 0;
+      const dateB = new Date(b.date + 'T00:00:00Z').getTime() || 0;
+      if (dateA !== dateB) return dateB - dateA;
+      const genA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const genB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (genA !== genB) return genB - genA;
+      return (b.id || '').localeCompare(a.id || '');
+    });
+
+  const activeSavedFlightsPool = showAllDatesInSavedFlights
+    ? allStationEverSavedFlights
+    : allStationTodaySavedFlights;
+
   // Displayed flights in table based on origin:
   // 1. INSIDE 'FOR LOAD CONTROLLER' -> show only flights generated from Load Controller page
   // 2. In dashboard -> show only flights generated from 'FLIGHT DATA' page
-  const todayStationSavedFlights = allStationTodaySavedFlights.filter((r) => {
+  const todayStationSavedFlights = activeSavedFlightsPool.filter((r) => {
     if (savedFlightsSource === 'load-control') {
       return isLoadControlReport(r);
     }
     return !isLoadControlReport(r);
   });
+
+  // Backup & Restore utilities for guaranteed data safety
+  const handleExportStationBackup = () => {
+    const json = exportStationBackupJson(currentStationCode);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `USBA_BACKUP_${currentStationCode}_${todayIsoDate}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`BACKUP FILE DOWNLOADED FOR STATION ${currentStationCode}!`);
+  };
+
+  const handleRestoreBackupFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        const res = restoreStationBackupJson(content);
+        showToast(`RESTORED ${res.restoredFlights} FLIGHTS AND ${res.restoredMass} MASS REPORTS!`);
+        // Immediately reload in component state
+        setCloudFlightReports(getCachedFlightReports());
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Station Today's Saved Flights KPI Totals (reflects active page's flight list)
   const savedTotalFlights = todayStationSavedFlights.length;
@@ -1314,7 +1351,48 @@ export default function App() {
                   title="Downloads all flight data together as Microsoft Excel (.xlsx)"
                 >
                   <Download className="w-4 h-4" />
-                  <span>DOWNLOAD EXCEL (.XLSX) ({allStationTodaySavedFlights.length})</span>
+                  <span>DOWNLOAD EXCEL (.XLSX) ({activeSavedFlightsPool.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAllDatesInSavedFlights((prev) => !prev)}
+                  className={`px-3 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border transition-all uppercase ${
+                    showAllDatesInSavedFlights
+                      ? 'bg-amber-600 hover:bg-amber-500 border-amber-400'
+                      : 'bg-slate-800 hover:bg-slate-700 border-slate-700'
+                  }`}
+                  title="Toggle between today's flights and all saved flights for this station"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>{showAllDatesInSavedFlights ? 'SHOW TODAY ONLY' : `ALL DATES (${allStationEverSavedFlights.length})`}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportStationBackup}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
+                  title="Exports complete station flight database as a local JSON backup file"
+                >
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>BACKUP (.JSON)</span>
+                </button>
+
+                <input
+                  type="file"
+                  ref={backupFileInputRef}
+                  onChange={handleRestoreBackupFile}
+                  accept=".json"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => backupFileInputRef.current?.click()}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
+                  title="Restores flights from a downloaded JSON backup file into the station database"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>RESTORE</span>
                 </button>
 
                 <button

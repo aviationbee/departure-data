@@ -4,6 +4,9 @@ import {
   saveMassReportToCloud,
   deleteMassReportFromCloud,
   subscribeToMassReports,
+  getCachedMassReports,
+  exportStationBackupJson,
+  restoreStationBackupJson,
   StoredMassReport,
   logUserActivity,
 } from '../firebase';
@@ -20,6 +23,8 @@ import {
   Send,
   Navigation,
   Search,
+  HardDrive,
+  Upload,
 } from 'lucide-react';
 
 interface MassHistoryItem {
@@ -372,6 +377,37 @@ export const MassFormModule: React.FC<Props> = ({
     preparedBy?: string;
     designation?: string;
   } | null>(null);
+
+  const massBackupInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportMassBackup = () => {
+    const stationCode = (userInfo.stationName || 'DAC').trim().toUpperCase();
+    const json = exportStationBackupJson(stationCode);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `USBA_MAAS_BACKUP_${stationCode}_${getTodayDate()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`MAAS BACKUP DOWNLOADED FOR STATION ${stationCode}!`);
+  };
+
+  const handleRestoreMassBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        const res = restoreStationBackupJson(content);
+        showToast(`RESTORED ${res.restoredMass} MASS REPORTS!`);
+        setCloudMassReports(getCachedMassReports());
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Auto-redirect if already logged into MAAS (persists session till user clicks LOG OUT)
   useEffect(() => {
@@ -908,6 +944,33 @@ export const MassFormModule: React.FC<Props> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportMassBackup}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
+                title="Exports MAAS reports as a local JSON backup file"
+              >
+                <HardDrive className="w-3.5 h-3.5" />
+                <span>BACKUP (.JSON)</span>
+              </button>
+
+              <input
+                type="file"
+                ref={massBackupInputRef}
+                onChange={handleRestoreMassBackup}
+                accept=".json"
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => massBackupInputRef.current?.click()}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
+                title="Restores MAAS reports from a JSON backup file"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>RESTORE</span>
+              </button>
+
               <button
                 type="button"
                 onClick={onPrevious}
