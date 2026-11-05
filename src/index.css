@@ -48,7 +48,7 @@
 }
 
 @media print {
-  html, body, #root {
+  html, body, #root, #root > div, .min-h-screen {
     background: #ffffff !important;
     background-image: none !important;
     color: #000000 !important;
@@ -62,8 +62,9 @@
     print-color-adjust: exact !important;
   }
 
-  /* Hide non-printable elements and Photo Card panel when printing */
+  /* Hide non-printable elements, radial glow, buttons, headers */
   .no-print,
+  [class*="radial-gradient"],
   #left-report-printable,
   nav,
   header,
@@ -80,7 +81,7 @@
   #right-report-printable,
   #arrival-report-printable,
   .print-table-scroll {
-    background: transparent !important;
+    background: #ffffff !important;
     background-image: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -117,7 +118,7 @@
     max-width: 100% !important;
     min-height: 0 !important;
     margin: 0 auto !important;
-    padding: 2mm 0 !important;
+    padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
     background: #ffffff !important;

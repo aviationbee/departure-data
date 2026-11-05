@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserInfo, PageMode } from '../types';
 import {
   saveMassReportToCloud,
@@ -358,6 +358,9 @@ export const MassFormModule: React.FC<Props> = ({
   const [flightCategory, setFlightCategory] = useState<string>('MAAS');
   const [flstData, setFlstData] = useState<string>('');
 
+  const isReturningFromReportRef = useRef(false);
+  const generatedFromHistoryRef = useRef(false);
+
   const [cloudMassReports, setCloudMassReports] = useState<StoredMassReport[]>([]);
   const [historySearch, setHistorySearch] = useState('');
   const [activeReportData, setActiveReportData] = useState<{
@@ -381,8 +384,15 @@ export const MassFormModule: React.FC<Props> = ({
   }, [currentPage, setCurrentPage]);
 
   // When user comes to MAAS form dashboard (data input page), ALWAYS present a fresh page with no previous data and Date = TODAY
+  // EXCEPT when user clicked 'PREVIOUS' on the final report page to edit/correct data
   useEffect(() => {
     if (currentPage === 'mass-dashboard') {
+      if (isReturningFromReportRef.current) {
+        // User returned via 'PREVIOUS' from final report to edit/correct data
+        isReturningFromReportRef.current = false;
+        return;
+      }
+
       localStorage.removeItem('massApp_flight-date');
       localStorage.removeItem('massApp_flight-no');
       localStorage.removeItem('massApp_flight-dest');
@@ -516,6 +526,7 @@ export const MassFormModule: React.FC<Props> = ({
   // Generate / Save MASS Report
   const handleGenerateReport = (fromHistory = false, item?: MassHistoryItem) => {
     if (fromHistory && item) {
+      generatedFromHistoryRef.current = true;
       setActiveReportData({
         dateInput: item.dateInput,
         flightNoInput: item.flightNoInput,
@@ -528,6 +539,8 @@ export const MassFormModule: React.FC<Props> = ({
       setCurrentPage('mass-report');
       return;
     }
+
+    generatedFromHistoryRef.current = false;
 
     const cleanFlightNo = flightNo.trim();
     const cleanDest = flightDest.toUpperCase();
@@ -581,14 +594,24 @@ export const MassFormModule: React.FC<Props> = ({
       designation: (designation || 'EXECUTIVE').toUpperCase(),
     });
 
-    // Reset inputs fresh so returning to mass-dashboard is clean for the next flight
-    setFlightDate(getTodayDate());
-    setFlightNo('');
-    setFlightDest('BKK');
-    setFlightCategory('MAAS');
-    setFlstData('');
-
     setCurrentPage('mass-report');
+  };
+
+  // When clicking PREVIOUS on the final report, return to data entry with all inputted data preserved for user correction
+  const handlePreviousFromReport = () => {
+    if (generatedFromHistoryRef.current) {
+      setCurrentPage('mass-history');
+      return;
+    }
+    if (activeReportData) {
+      setFlightDate(activeReportData.dateInput || getTodayDate());
+      setFlightNo(activeReportData.flightNoInput || '');
+      setFlightDest(activeReportData.destInput || 'BKK');
+      setFlightCategory(activeReportData.categoryInput || 'MAAS');
+      setFlstData(activeReportData.flstText || '');
+    }
+    isReturningFromReportRef.current = true;
+    setCurrentPage('mass-dashboard');
   };
 
   const handleDeleteHistoryItem = (item: MassHistoryItem) => {
@@ -1062,7 +1085,7 @@ export const MassFormModule: React.FC<Props> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={onPrevious}
+              onClick={handlePreviousFromReport}
               className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-all uppercase"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

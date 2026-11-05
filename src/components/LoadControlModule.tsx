@@ -1579,14 +1579,22 @@ export const LoadControlModule: React.FC<Props> = ({
     formData.acRegSuffix.toUpperCase().replace(/^(S2-|HS-|PK-)/, '')
   );
 
+  const handlePrintReport = (target: 'departure' | 'arrival') => {
+    document.body.setAttribute('data-print-target', target);
+    window.print();
+    setTimeout(() => {
+      document.body.removeAttribute('data-print-target');
+    }, 500);
+  };
+
   return (
-    <div className="min-h-screen bg-[#030712] text-[#e0e6ed] font-mono flex flex-col relative select-text">
+    <div className="min-h-screen bg-[#030712] text-[#e0e6ed] font-mono flex flex-col relative select-text print:bg-white print:text-black print:min-h-0">
       {/* Background HUD Grid Glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-[#030712]/90 to-[#030712] pointer-events-none" />
+      <div className="no-print absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-[#030712]/90 to-[#030712] pointer-events-none" />
 
       {/* VIEW MODE: FINAL REPORT / MULTI-REPORT */}
       {viewMode === 'dual-report' ? (
-        <div className="relative z-10 flex-1 flex flex-col p-3 md:p-6 w-full max-w-7xl mx-auto">
+        <div className="relative z-10 flex-1 flex flex-col p-3 md:p-6 w-full max-w-7xl mx-auto print:p-0 print:m-0 print:max-w-none print:w-full">
           {/* Header Bar */}
           <div className="no-print w-full flex flex-col md:flex-row justify-between items-start md:items-center pb-4 mb-4 border-b border-cyan-500/40 gap-3">
             <div>
@@ -1679,7 +1687,7 @@ export const LoadControlModule: React.FC<Props> = ({
 
               {/* TAB 0: 1. FLIGHT DEPARTURE MESSAGE */}
               {(activeReportTab === 0 || activeReportTab === 5) && (
-                <div className="mb-6 bg-slate-900/95 border-2 border-cyan-500/60 rounded-xl p-5 shadow-2xl text-slate-100">
+                <div className="no-print mb-6 bg-slate-900/95 border-2 border-cyan-500/60 rounded-xl p-5 shadow-2xl text-slate-100">
                   <div className="flex justify-between items-center pb-2.5 mb-3 border-b border-cyan-500/40">
                     <h2 className="text-base font-black tracking-widest text-[#00f0ff] uppercase flex items-center gap-2">
                       <FileText className="w-4 h-4 text-cyan-400" />
@@ -1702,7 +1710,7 @@ export const LoadControlModule: React.FC<Props> = ({
 
               {/* TAB 1: 2. FLIGHT LDM */}
               {(activeReportTab === 1 || activeReportTab === 5) && (
-                <div className="mb-6 bg-slate-900/95 border-2 border-cyan-500/60 rounded-xl p-5 shadow-2xl text-slate-100">
+                <div className="no-print mb-6 bg-slate-900/95 border-2 border-cyan-500/60 rounded-xl p-5 shadow-2xl text-slate-100">
                   <div className="flex justify-between items-center pb-2.5 mb-3 border-b border-cyan-500/40">
                     <h2 className="text-base font-black tracking-widest text-[#00f0ff] uppercase flex items-center gap-2">
                       <Sliders className="w-4 h-4 text-emerald-400" />
@@ -1725,8 +1733,11 @@ export const LoadControlModule: React.FC<Props> = ({
 
               {/* TAB 2: 3. OFFICIAL FLIGHT DEPARTURE REPORT */}
               {(activeReportTab === 2 || activeReportTab === 5) && (
-                <div className="mb-6 bg-slate-900/95 border-2 border-indigo-500/60 rounded-xl p-5 shadow-2xl text-slate-100">
-                  <div className="flex justify-between items-center pb-2.5 mb-3 border-b border-indigo-500/40">
+                <div
+                  id="right-report-printable"
+                  className="mb-6 bg-slate-900/95 border-2 border-indigo-500/60 rounded-xl p-5 shadow-2xl text-slate-100 print:bg-white print:border-none print:p-0 print:m-0 print:shadow-none print:rounded-none"
+                >
+                  <div className="no-print flex justify-between items-center pb-2.5 mb-3 border-b border-indigo-500/40">
                     <h2 className="text-base font-black tracking-widest text-indigo-300 uppercase flex items-center gap-2">
                       <Plane className="w-4 h-4 text-indigo-400" />
                       <span>3. OFFICIAL FLIGHT DEPARTURE REPORT</span>
@@ -1734,7 +1745,7 @@ export const LoadControlModule: React.FC<Props> = ({
                     <div className="no-print flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => window.print()}
+                        onClick={() => handlePrintReport('departure')}
                         className="px-3 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 hover:text-white border border-indigo-500/50 text-xs font-bold uppercase flex items-center gap-1 cursor-pointer transition-all"
                       >
                         <Printer className="w-3.5 h-3.5" />
@@ -1742,7 +1753,7 @@ export const LoadControlModule: React.FC<Props> = ({
                       </button>
                     </div>
                   </div>
-                  <div className="overflow-x-auto bg-slate-950/60 p-2 rounded-xl">
+                  <div className="overflow-x-auto bg-slate-950/60 p-2 rounded-xl print:bg-white print:p-0 print:overflow-visible print:rounded-none">
                     <DepartureReportTable
                       data={flightFormDataForOfficialTables}
                       user={userInfo}
@@ -1754,8 +1765,11 @@ export const LoadControlModule: React.FC<Props> = ({
 
               {/* TAB 3: 4. OFFICIAL FLIGHT ARRIVAL REPORT */}
               {(activeReportTab === 3 || activeReportTab === 5) && (
-                <div className="mb-6 bg-slate-900/95 border-2 border-teal-500/60 rounded-xl p-5 shadow-2xl text-slate-100">
-                  <div className="flex justify-between items-center pb-2.5 mb-3 border-b border-teal-500/40">
+                <div
+                  id="arrival-report-printable"
+                  className="mb-6 bg-slate-900/95 border-2 border-teal-500/60 rounded-xl p-5 shadow-2xl text-slate-100 print:bg-white print:border-none print:p-0 print:m-0 print:shadow-none print:rounded-none"
+                >
+                  <div className="no-print flex justify-between items-center pb-2.5 mb-3 border-b border-teal-500/40">
                     <h2 className="text-base font-black tracking-widest text-teal-300 uppercase flex items-center gap-2">
                       <Plane className="w-4 h-4 text-teal-400 rotate-90" />
                       <span>4. OFFICIAL FLIGHT ARRIVAL REPORT</span>
@@ -1763,7 +1777,7 @@ export const LoadControlModule: React.FC<Props> = ({
                     <div className="no-print flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => window.print()}
+                        onClick={() => handlePrintReport('arrival')}
                         className="px-3 py-1 rounded bg-teal-950/80 hover:bg-teal-900 text-teal-200 hover:text-white border border-teal-500/50 text-xs font-bold uppercase flex items-center gap-1 cursor-pointer transition-all"
                       >
                         <Printer className="w-3.5 h-3.5" />
@@ -1771,7 +1785,7 @@ export const LoadControlModule: React.FC<Props> = ({
                       </button>
                     </div>
                   </div>
-                  <div className="overflow-x-auto bg-slate-950/60 p-2 rounded-xl">
+                  <div className="overflow-x-auto bg-slate-950/60 p-2 rounded-xl print:bg-white print:p-0 print:overflow-visible print:rounded-none">
                     <ArrivalReportTable
                       data={flightFormDataForOfficialTables}
                       user={userInfo}
@@ -1783,7 +1797,7 @@ export const LoadControlModule: React.FC<Props> = ({
 
               {/* TAB 4: 5. MVT MESSAGE */}
               {(activeReportTab === 4 || activeReportTab === 5) && (
-                <div className="mb-6 bg-slate-900/95 border-2 border-amber-500/60 rounded-xl p-5 shadow-2xl text-slate-100">
+                <div className="no-print mb-6 bg-slate-900/95 border-2 border-amber-500/60 rounded-xl p-5 shadow-2xl text-slate-100">
                   <div className="flex justify-between items-center pb-2.5 mb-3 border-b border-amber-500/40">
                     <h2 className="text-base font-black tracking-widest text-amber-300 uppercase flex items-center gap-2">
                       <Send className="w-4 h-4 text-amber-400" />
