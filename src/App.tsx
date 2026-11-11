@@ -975,6 +975,7 @@ export default function App() {
 
   const todayIsoDate = new Date().toISOString().split('T')[0];
   const todayLocalDate = new Date().toLocaleDateString('en-CA');
+  const todayBdDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
   const currentStationCode = extractStationCode(userInfo.stationName);
   const currentStationUpper = currentStationCode;
 
@@ -1012,21 +1013,22 @@ export default function App() {
         }
       }
 
-      // Any flight generated during today's shift (within 30 hours) is guaranteed to show as today's flight
-      let isCreatedRecently = false;
+      // Only today generated flights from time 00:00 to 23:59 (in local / BD / UTC calendar date)
+      let isGeneratedToday = false;
       if (r.createdAt) {
-        const createdMs = new Date(r.createdAt).getTime();
-        const diffMs = Date.now() - createdMs;
-        const isWithinShift = diffMs >= -10 * 60 * 1000 && diffMs <= 30 * 60 * 60 * 1000;
-        const isCalendarToday =
+        const createdDateLocal = new Date(r.createdAt).toLocaleDateString('en-CA');
+        const createdDateBd = new Date(r.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+        isGeneratedToday =
           r.createdAt.startsWith(todayIsoDate) ||
           r.createdAt.startsWith(todayLocalDate) ||
-          new Date(r.createdAt).toLocaleDateString('en-CA') === todayLocalDate ||
-          new Date(r.createdAt).toLocaleDateString('en-CA') === todayIsoDate;
-        isCreatedRecently = isWithinShift || isCalendarToday;
+          r.createdAt.startsWith(todayBdDate) ||
+          createdDateLocal === todayLocalDate ||
+          createdDateLocal === todayIsoDate ||
+          createdDateBd === todayBdDate ||
+          createdDateBd === todayLocalDate;
       }
 
-      return Boolean(isDirectMatch || isDmyMatch || isCreatedRecently);
+      return Boolean(isDirectMatch || isDmyMatch || isGeneratedToday);
     })
     .sort((a, b) => {
       const dateA = new Date(a.date + 'T00:00:00Z').getTime() || 0;
@@ -1062,12 +1064,23 @@ export default function App() {
       return (b.id || '').localeCompare(a.id || '');
     });
 
-  const activeSavedFlightsPool = showAllDatesInSavedFlights
-    ? allStationEverSavedFlights
-    : allStationTodaySavedFlights;
+  // 1. Separate by source:
+  // When in 'SAVED LDM' (savedFlightsSource === 'load-control') -> only flights generated from LOAD CONTROL
+  // When in 'SAVED FLIGHT DATA' (savedFlightsSource === 'standard') -> only flights generated from FLIGHT DATA
+  const isLcView = savedFlightsSource === 'load-control';
 
-  // Display every generated flight data for this station in both SAVED FLIGHT DATA and SAVED LDM
-  const todayStationSavedFlights = activeSavedFlightsPool;
+  const sourceTodaySavedFlights = allStationTodaySavedFlights.filter((r) =>
+    isLcView ? isLoadControlReport(r) : !isLoadControlReport(r)
+  );
+
+  const sourceEverSavedFlights = allStationEverSavedFlights.filter((r) =>
+    isLcView ? isLoadControlReport(r) : !isLoadControlReport(r)
+  );
+
+  // Table flights: default shows ONLY today's flights for this source; toggles to ALL DATES if user clicked 'ALL DATES'
+  const todayStationSavedFlights = showAllDatesInSavedFlights
+    ? sourceEverSavedFlights
+    : sourceTodaySavedFlights;
 
   // Backup & Restore utilities for guaranteed data safety
   const handleExportStationBackup = () => {
@@ -1397,10 +1410,10 @@ export default function App() {
                   type="button"
                   onClick={handleDownloadStationSavedExcel}
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all"
-                  title="Downloads all flight data together as Microsoft Excel (.xlsx)"
+                  title="Downloads all today's flights together (Flight Data + Load Control) as Microsoft Excel (.xlsx)"
                 >
                   <Download className="w-4 h-4" />
-                  <span>DOWNLOAD EXCEL (.XLSX) ({activeSavedFlightsPool.length})</span>
+                  <span>DOWNLOAD EXCEL (.XLSX) ({allStationTodaySavedFlights.length})</span>
                 </button>
 
                 <button
@@ -1411,10 +1424,10 @@ export default function App() {
                       ? 'bg-amber-600 hover:bg-amber-500 border-amber-400'
                       : 'bg-slate-800 hover:bg-slate-700 border-slate-700'
                   }`}
-                  title="Toggle between today's flights and all saved flights for this station"
+                  title="Toggle between today's flights and all saved flights for this source"
                 >
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>{showAllDatesInSavedFlights ? 'SHOW TODAY ONLY' : `ALL DATES (${allStationEverSavedFlights.length})`}</span>
+                  <span>{showAllDatesInSavedFlights ? 'SHOW TODAY ONLY' : `ALL DATES (${sourceEverSavedFlights.length})`}</span>
                 </button>
 
                 <button
