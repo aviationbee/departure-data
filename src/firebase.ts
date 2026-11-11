@@ -248,6 +248,7 @@ export interface StoredFlightReport {
 }
 
 export function isLoadControlReport(r: StoredFlightReport): boolean {
+  if (r.sourceModule === 'standard') return false;
   if (r.sourceModule === 'load-control') return true;
   if (r.id && r.id.endsWith('_LC')) return true;
   const raw = (r.rawFormData as any) || {};
@@ -268,7 +269,6 @@ export function isLoadControlReport(r: StoredFlightReport): boolean {
   if (numOnly === '341' && (r.station === 'SPD' || (r.route || '').includes('SPD'))) {
     return true;
   }
-  if (r.sourceModule === 'standard') return false;
   return false;
 }
 

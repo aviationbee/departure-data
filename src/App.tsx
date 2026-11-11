@@ -984,15 +984,32 @@ export default function App() {
       const routeStation = (r.route || '').trim().toUpperCase().split('-')[0];
       const stationMatches = rStation === currentStationCode || routeStation === currentStationCode;
       if (!stationMatches) return false;
-      const isTodayFlightDate =
+
+      // Robust date matching across timezones and formats
+      const isDirectMatch =
         r.date === todayIsoDate ||
         r.date === todayLocalDate ||
         (r.date && (r.date.includes(todayIsoDate) || r.date.includes(todayLocalDate)));
-      const isCreatedToday =
-        r.createdAt &&
-        (r.createdAt.startsWith(todayIsoDate) ||
-          new Date(r.createdAt).toLocaleDateString('en-CA') === todayLocalDate);
-      return Boolean(isTodayFlightDate || isCreatedToday);
+
+      let isDmyMatch = false;
+      if (r.date) {
+        const dmy = r.date.trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+        if (dmy) {
+          const iso = `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+          isDmyMatch = iso === todayIsoDate || iso === todayLocalDate;
+        }
+      }
+
+      let isCreatedToday = false;
+      if (r.createdAt) {
+        isCreatedToday =
+          r.createdAt.startsWith(todayIsoDate) ||
+          r.createdAt.startsWith(todayLocalDate) ||
+          new Date(r.createdAt).toLocaleDateString('en-CA') === todayLocalDate ||
+          new Date(r.createdAt).toLocaleDateString('en-CA') === todayIsoDate;
+      }
+
+      return Boolean(isDirectMatch || isDmyMatch || isCreatedToday);
     })
     .sort((a, b) => {
       const dateA = new Date(a.date + 'T00:00:00Z').getTime() || 0;
