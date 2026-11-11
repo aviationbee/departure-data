@@ -5,6 +5,7 @@ import {
   deleteMassReportFromCloud,
   subscribeToMassReports,
   getCachedMassReports,
+  syncMassReportsFromCloud,
   exportStationBackupJson,
   restoreStationBackupJson,
   StoredMassReport,
@@ -25,6 +26,8 @@ import {
   Search,
   HardDrive,
   Upload,
+  Calendar,
+  RotateCcw,
 } from 'lucide-react';
 
 interface MassHistoryItem {
@@ -368,6 +371,7 @@ export const MassFormModule: React.FC<Props> = ({
 
   const [cloudMassReports, setCloudMassReports] = useState<StoredMassReport[]>([]);
   const [historySearch, setHistorySearch] = useState('');
+  const [showAllDatesInMassHistory, setShowAllDatesInMassHistory] = useState(false);
   const [activeReportData, setActiveReportData] = useState<{
     dateInput: string;
     flightNoInput: string;
@@ -440,6 +444,9 @@ export const MassFormModule: React.FC<Props> = ({
       setFlightDest('BKK');
       setFlightCategory('MAAS');
       setFlstData('');
+    } else if (currentPage === 'mass-history') {
+      // Default to SHOW TODAY ONLY when navigating to SAVED REPORTS HISTORY
+      setShowAllDatesInMassHistory(false);
     }
   }, [currentPage]);
 
@@ -490,7 +497,43 @@ export const MassFormModule: React.FC<Props> = ({
       return (b.id || 0) - (a.id || 0);
     });
 
-  const displayedHistoryList = stationHistoryList.filter((item) => {
+  const todayStr = getTodayDate();
+  const todayIso = new Date().toISOString().split('T')[0];
+  const todayLocalDate = new Date().toLocaleDateString('en-CA');
+
+  const filteredByDateList = showAllDatesInMassHistory
+    ? stationHistoryList
+    : stationHistoryList.filter((item) => {
+        const isDirect =
+          item.dateInput === todayStr ||
+          item.dateInput === todayIso ||
+          item.dateInput === todayLocalDate;
+        let isDmy = false;
+        if (item.dateInput) {
+          const dmy = item.dateInput.trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+          if (dmy) {
+            const iso1 = `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+            const iso2 = `${dmy[3]}-${dmy[1].padStart(2, '0')}-${dmy[2].padStart(2, '0')}`;
+            isDmy =
+              iso1 === todayIso ||
+              iso1 === todayLocalDate ||
+              iso2 === todayIso ||
+              iso2 === todayLocalDate;
+          }
+        }
+        let isCreatedToday = false;
+        if (item.createdAt) {
+          const diffMs = Date.now() - new Date(item.createdAt).getTime();
+          isCreatedToday =
+            (diffMs >= -10 * 60 * 1000 && diffMs <= 30 * 60 * 60 * 1000) ||
+            item.createdAt.startsWith(todayIso) ||
+            item.createdAt.startsWith(todayLocalDate) ||
+            new Date(item.createdAt).toLocaleDateString('en-CA') === todayLocalDate;
+        }
+        return Boolean(isDirect || isDmy || isCreatedToday);
+      });
+
+  const displayedHistoryList = filteredByDateList.filter((item) => {
     if (!historySearch.trim()) return true;
     const q = historySearch.trim().toUpperCase();
     const matchFlight =
@@ -640,11 +683,23 @@ export const MassFormModule: React.FC<Props> = ({
       return;
     }
     if (activeReportData) {
-      setFlightDate(activeReportData.dateInput || getTodayDate());
-      setFlightNo(activeReportData.flightNoInput || '');
-      setFlightDest(activeReportData.destInput || 'BKK');
-      setFlightCategory(activeReportData.categoryInput || 'MAAS');
-      setFlstData(activeReportData.flstText || '');
+      const d = activeReportData.dateInput || getTodayDate();
+      const fn = activeReportData.flightNoInput || '';
+      const dst = activeReportData.destInput || 'BKK';
+      const cat = activeReportData.categoryInput || 'MAAS';
+      const flst = activeReportData.flstText || '';
+
+      setFlightDate(d);
+      setFlightNo(fn);
+      setFlightDest(dst);
+      setFlightCategory(cat);
+      setFlstData(flst);
+
+      localStorage.setItem('massApp_flight-date', d);
+      localStorage.setItem('massApp_flight-no', fn);
+      localStorage.setItem('massApp_flight-dest', dst);
+      localStorage.setItem('massApp_flight-category', cat);
+      localStorage.setItem('massApp_flst-data', flst);
     }
     isReturningFromReportRef.current = true;
     setCurrentPage('mass-dashboard');
@@ -944,6 +999,35 @@ export const MassFormModule: React.FC<Props> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  showToast('SYNCING LATEST MASS REPORTS FROM CLOUD...');
+                  const synced = await syncMassReportsFromCloud();
+                  setCloudMassReports(synced);
+                  showToast(`SYNC COMPLETE! (${synced.length} REPORTS CACHED)`);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                title="Checks and syncs latest MASS reports from cloud without continuous quota cost"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>SYNC / REFRESH</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAllDatesInMassHistory((prev) => !prev)}
+                className={`px-3 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border transition-all uppercase ${
+                  showAllDatesInMassHistory
+                    ? 'bg-amber-600 hover:bg-amber-500 border-amber-400'
+                    : 'bg-slate-800 hover:bg-slate-700 border-slate-700'
+                }`}
+                title="Toggle between today's reports and all saved reports"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{showAllDatesInMassHistory ? 'SHOW TODAY ONLY' : `ALL DATES (${stationHistoryList.length})`}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleExportMassBackup}

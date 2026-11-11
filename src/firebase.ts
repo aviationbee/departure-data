@@ -475,6 +475,9 @@ export async function saveFlightReportToCloud(
   // 2. Persist to Cloud Firestore
   try {
     await setDoc(doc(db, 'flight_reports', docId), payload);
+    setTimeout(() => {
+      syncFlightReportsFromCloud().catch(() => {});
+    }, 150);
   } catch (err: any) {
     console.warn('Firestore saveFlightReportToCloud warning:', err);
     if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
@@ -544,6 +547,9 @@ export async function saveMassReportToCloud(
 
   try {
     await setDoc(doc(db, 'mass_reports', docId), massData);
+    setTimeout(() => {
+      syncMassReportsFromCloud().catch(() => {});
+    }, 150);
   } catch (err: any) {
     console.warn('Firestore saveMassReportToCloud warning:', err);
     if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
@@ -620,7 +626,68 @@ export async function circulateAdminNotice(
   }
 }
 
-// Subscribe to Flight Reports in real-time (filtered from latest flight generate/today to last 15 days)
+// On-Demand Cloud Sync (only counts reads when editing, generating, or clicking sync - NEVER while app sits open)
+export async function syncFlightReportsFromCloud(): Promise<StoredFlightReport[]> {
+  try {
+    const q = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(150));
+    const snapshot = await getDocs(q);
+    const currentNow = Date.now();
+    const cutoff = currentNow - FIFTEEN_DAYS_MS;
+    const list: StoredFlightReport[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Omit<StoredFlightReport, 'id'>;
+      const cTime = data.createdAt ? new Date(data.createdAt).getTime() : currentNow;
+      if (cTime >= cutoff && (!data.expiresAt || data.expiresAt > currentNow)) {
+        list.push({ id: docSnap.id, ...data });
+      }
+    });
+    const merged = mergeFlightReports(getCachedFlightReports(), list).filter((r) => {
+      const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
+      return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
+    });
+    saveCachedFlightReports(merged, true);
+    flightReportSubscribers.forEach((cb) => cb(merged));
+    return merged;
+  } catch (err: any) {
+    console.warn('syncFlightReportsFromCloud warning:', err);
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+      notifyQuotaExceeded();
+    }
+    return getCachedFlightReports();
+  }
+}
+
+export async function syncMassReportsFromCloud(): Promise<StoredMassReport[]> {
+  try {
+    const q = query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(150));
+    const snapshot = await getDocs(q);
+    const currentNow = Date.now();
+    const cutoff = currentNow - FIFTEEN_DAYS_MS;
+    const list: StoredMassReport[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Omit<StoredMassReport, 'id'>;
+      const cTime = data.createdAt ? new Date(data.createdAt).getTime() : currentNow;
+      if (cTime >= cutoff && (!data.expiresAt || data.expiresAt > currentNow)) {
+        list.push({ id: docSnap.id, ...data });
+      }
+    });
+    const merged = mergeMassReports(getCachedMassReports(), list).filter((r) => {
+      const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
+      return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
+    });
+    saveCachedMassReports(merged, true);
+    massReportSubscribers.forEach((cb) => cb(merged));
+    return merged;
+  } catch (err: any) {
+    console.warn('syncMassReportsFromCloud warning:', err);
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+      notifyQuotaExceeded();
+    }
+    return getCachedMassReports();
+  }
+}
+
+// Subscribe to Flight Reports (Serves instantly from Local Storage with ZERO read quota cost when app is open)
 export function subscribeToFlightReports(
   callback: (reports: StoredFlightReport[]) => void
 ) {
@@ -629,59 +696,19 @@ export function subscribeToFlightReports(
   const now = Date.now();
   const fifteenDaysCutoff = now - FIFTEEN_DAYS_MS;
 
-  // 1. Immediately emit cached reports from localStorage (within last 15 days)
+  // Immediately emit cached reports from localStorage (0 Firestore reads!)
   const cached = getCachedFlightReports().filter((r) => {
     const cTime = r.createdAt ? new Date(r.createdAt).getTime() : now;
     return cTime >= fifteenDaysCutoff && (!r.expiresAt || r.expiresAt > now);
   });
-  if (cached.length > 0) {
-    callback(cached);
-  }
+  callback(cached);
 
-  // 2. Attach Firestore live onSnapshot listener
-  const q = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'));
-  const unsub = onSnapshot(
-    q,
-    (snapshot) => {
-      const currentNow = Date.now();
-      const cutoff = currentNow - FIFTEEN_DAYS_MS;
-      const list: StoredFlightReport[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as Omit<StoredFlightReport, 'id'>;
-        const cTime = data.createdAt ? new Date(data.createdAt).getTime() : currentNow;
-        if (cTime >= cutoff && (!data.expiresAt || data.expiresAt > currentNow)) {
-          list.push({ id: docSnap.id, ...data });
-        }
-      });
-      const merged = mergeFlightReports(getCachedFlightReports(), list).filter((r) => {
-        const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
-        return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
-      });
-      saveCachedFlightReports(merged, true);
-      callback(merged);
-    },
-    (err: any) => {
-      console.warn('Warning subscribing to flight_reports:', err);
-      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
-        notifyQuotaExceeded();
-      }
-      // Fallback to local storage cache so reports are never empty
-      const fallback = getCachedFlightReports().filter((r) => {
-        const cTime = r.createdAt ? new Date(r.createdAt).getTime() : Date.now();
-        return cTime >= Date.now() - FIFTEEN_DAYS_MS && (!r.expiresAt || r.expiresAt > Date.now());
-      });
-      if (fallback.length > 0) {
-        callback(fallback);
-      }
-    }
-  );
   return () => {
     flightReportSubscribers.delete(callback);
-    unsub();
   };
 }
 
-// Subscribe to MASS Reports in real-time (filtered from latest generate/today to last 15 days)
+// Subscribe to MASS Reports (Serves instantly from Local Storage with ZERO read quota cost when app is open)
 export function subscribeToMassReports(
   callback: (reports: StoredMassReport[]) => void
 ) {
@@ -690,53 +717,15 @@ export function subscribeToMassReports(
   const now = Date.now();
   const fifteenDaysCutoff = now - FIFTEEN_DAYS_MS;
 
-  // 1. Immediately emit cached reports from localStorage (within last 15 days)
+  // Immediately emit cached reports from localStorage (0 Firestore reads!)
   const cached = getCachedMassReports().filter((r) => {
     const cTime = r.createdAt ? new Date(r.createdAt).getTime() : now;
     return cTime >= fifteenDaysCutoff && (!r.expiresAt || r.expiresAt > now);
   });
-  if (cached.length > 0) {
-    callback(cached);
-  }
+  callback(cached);
 
-  const q = query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'));
-  const unsub = onSnapshot(
-    q,
-    (snapshot) => {
-      const currentNow = Date.now();
-      const cutoff = currentNow - FIFTEEN_DAYS_MS;
-      const list: StoredMassReport[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as Omit<StoredMassReport, 'id'>;
-        const cTime = data.createdAt ? new Date(data.createdAt).getTime() : currentNow;
-        if (cTime >= cutoff && (!data.expiresAt || data.expiresAt > currentNow)) {
-          list.push({ id: docSnap.id, ...data });
-        }
-      });
-      const merged = mergeMassReports(getCachedMassReports(), list).filter((r) => {
-        const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
-        return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
-      });
-      saveCachedMassReports(merged, true);
-      callback(merged);
-    },
-    (err: any) => {
-      console.warn('Warning subscribing to mass_reports:', err);
-      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
-        notifyQuotaExceeded();
-      }
-      const fallback = getCachedMassReports().filter((r) => {
-        const cTime = r.createdAt ? new Date(r.createdAt).getTime() : Date.now();
-        return cTime >= Date.now() - FIFTEEN_DAYS_MS && (!r.expiresAt || r.expiresAt > Date.now());
-      });
-      if (fallback.length > 0) {
-        callback(fallback);
-      }
-    }
-  );
   return () => {
     massReportSubscribers.delete(callback);
-    unsub();
   };
 }
 

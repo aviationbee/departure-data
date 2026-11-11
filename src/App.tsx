@@ -45,6 +45,7 @@ import {
   exportStationBackupJson,
   restoreStationBackupJson,
   getCachedFlightReports,
+  syncFlightReportsFromCloud,
   StoredFlightReport,
   SystemNoticeDoc,
 } from './firebase';
@@ -981,11 +982,17 @@ export default function App() {
   const allStationTodaySavedFlights = cloudFlightReports
     .filter((r) => {
       const rStation = extractStationCode(r.station || 'DAC');
-      const routeStation = (r.route || '').trim().toUpperCase().split('-')[0];
-      const stationMatches = rStation === currentStationCode || routeStation === currentStationCode;
+      const routeUpper = (r.route || '').trim().toUpperCase();
+      const routeParts = routeUpper.split(/[-/]/);
+      const originStation = routeParts[0] ? extractStationCode(routeParts[0]) : '';
+      const destStation = routeParts[1] ? extractStationCode(routeParts[1]) : '';
+      const stationMatches =
+        rStation === currentStationCode ||
+        originStation === currentStationCode ||
+        destStation === currentStationCode;
       if (!stationMatches) return false;
 
-      // Robust date matching across timezones and formats
+      // Robust date matching across timezones, shifts, and formats
       const isDirectMatch =
         r.date === todayIsoDate ||
         r.date === todayLocalDate ||
@@ -995,21 +1002,31 @@ export default function App() {
       if (r.date) {
         const dmy = r.date.trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
         if (dmy) {
-          const iso = `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
-          isDmyMatch = iso === todayIsoDate || iso === todayLocalDate;
+          const iso1 = `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+          const iso2 = `${dmy[3]}-${dmy[1].padStart(2, '0')}-${dmy[2].padStart(2, '0')}`;
+          isDmyMatch =
+            iso1 === todayIsoDate ||
+            iso1 === todayLocalDate ||
+            iso2 === todayIsoDate ||
+            iso2 === todayLocalDate;
         }
       }
 
-      let isCreatedToday = false;
+      // Any flight generated during today's shift (within 30 hours) is guaranteed to show as today's flight
+      let isCreatedRecently = false;
       if (r.createdAt) {
-        isCreatedToday =
+        const createdMs = new Date(r.createdAt).getTime();
+        const diffMs = Date.now() - createdMs;
+        const isWithinShift = diffMs >= -10 * 60 * 1000 && diffMs <= 30 * 60 * 60 * 1000;
+        const isCalendarToday =
           r.createdAt.startsWith(todayIsoDate) ||
           r.createdAt.startsWith(todayLocalDate) ||
           new Date(r.createdAt).toLocaleDateString('en-CA') === todayLocalDate ||
           new Date(r.createdAt).toLocaleDateString('en-CA') === todayIsoDate;
+        isCreatedRecently = isWithinShift || isCalendarToday;
       }
 
-      return Boolean(isDirectMatch || isDmyMatch || isCreatedToday);
+      return Boolean(isDirectMatch || isDmyMatch || isCreatedRecently);
     })
     .sort((a, b) => {
       const dateA = new Date(a.date + 'T00:00:00Z').getTime() || 0;
@@ -1021,12 +1038,19 @@ export default function App() {
       return (b.id || '').localeCompare(a.id || '');
     });
 
-  // All flights across all dates for this station (preserved in local cache and Firestore for 90 days)
+  // All flights across all dates for this station (preserved in local cache and Firestore for 15-90 days)
   const allStationEverSavedFlights = cloudFlightReports
     .filter((r) => {
       const rStation = extractStationCode(r.station || 'DAC');
-      const routeStation = (r.route || '').trim().toUpperCase().split('-')[0];
-      return rStation === currentStationCode || routeStation === currentStationCode;
+      const routeUpper = (r.route || '').trim().toUpperCase();
+      const routeParts = routeUpper.split(/[-/]/);
+      const originStation = routeParts[0] ? extractStationCode(routeParts[0]) : '';
+      const destStation = routeParts[1] ? extractStationCode(routeParts[1]) : '';
+      return (
+        rStation === currentStationCode ||
+        originStation === currentStationCode ||
+        destStation === currentStationCode
+      );
     })
     .sort((a, b) => {
       const dateA = new Date(a.date + 'T00:00:00Z').getTime() || 0;
@@ -1042,15 +1066,8 @@ export default function App() {
     ? allStationEverSavedFlights
     : allStationTodaySavedFlights;
 
-  // Displayed flights in table based on origin:
-  // 1. INSIDE 'FOR LOAD CONTROLLER' -> show only flights generated from Load Controller page
-  // 2. In dashboard -> show only flights generated from 'FLIGHT DATA' page
-  const todayStationSavedFlights = activeSavedFlightsPool.filter((r) => {
-    if (savedFlightsSource === 'load-control') {
-      return isLoadControlReport(r);
-    }
-    return !isLoadControlReport(r);
-  });
+  // Display every generated flight data for this station in both SAVED FLIGHT DATA and SAVED LDM
+  const todayStationSavedFlights = activeSavedFlightsPool;
 
   // Backup & Restore utilities for guaranteed data safety
   const handleExportStationBackup = () => {
@@ -1363,6 +1380,21 @@ export default function App() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  onClick={async () => {
+                    showToast('SYNCING LATEST FLIGHTS FROM CLOUD...');
+                    const synced = await syncFlightReportsFromCloud();
+                    setCloudFlightReports(synced);
+                    showToast(`SYNC COMPLETE! (${synced.length} FLIGHTS CACHED)`);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                  title="Checks and syncs latest flights from cloud without background quota cost"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>SYNC / REFRESH</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleDownloadStationSavedExcel}
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-2 transition-all"
                   title="Downloads all flight data together as Microsoft Excel (.xlsx)"
@@ -1513,7 +1545,18 @@ export default function App() {
                           )}
                         </td>
                         <td className="p-3.5 font-black text-sky-300 whitespace-nowrap">
-                          {r.flightNo}
+                          <div className="flex items-center gap-1.5">
+                            <span>{r.flightNo}</span>
+                            {isLoadControlReport(r) ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/50">
+                                LDM
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/50">
+                                FLIGHT
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3.5 font-bold text-white whitespace-nowrap">{r.route}</td>
                         <td className="p-3.5 font-bold text-slate-200 whitespace-nowrap">
@@ -1533,7 +1576,7 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => {
-                                if (savedFlightsSource === 'load-control') {
+                                if (isLoadControlReport(r)) {
                                   setLoadControlEditReport({ ...r });
                                   setLoadControlViewMode('dual-report');
                                   navigateToPage('load-control');
@@ -1553,7 +1596,7 @@ export default function App() {
                               }}
                               className="px-3.5 py-2 rounded-xl bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 hover:text-white border border-cyan-500/50 text-xs font-bold tracking-wider uppercase cursor-pointer inline-flex items-center gap-1.5 transition-all shadow"
                               title={
-                                savedFlightsSource === 'load-control'
+                                isLoadControlReport(r)
                                   ? "View Final Report (Departure Message & LDM)"
                                   : "View & Print Official Report"
                               }
