@@ -255,9 +255,9 @@ export function parseMassFLST(text: string, selectedCategory: string): MassPasse
     // Strip leading check-in sequence digits (e.g. "1  114 " -> "CRAM/PATRICK  MR...")
     const afterLeadingNums = rawLine.replace(/^\s*(?:\d+\s+)+/, '').trim();
 
-    // A passenger surname MUST start with at least 2 alphabet characters followed by a slash and given name
+    // A passenger surname followed by slash and given name (supports single-letter initials like INTEKAB/E U M MR)
     const paxNameMatch = afterLeadingNums.match(
-      /^([A-Z]{2,}(?:[\s\-][A-Z]{2,})*)\s*\/\s*([A-Z]{2,}(?:[\s\-][A-Z0-9]+)*)/i
+      /^([A-Z]+(?:[\s\-][A-Z]+)*)\s*\/\s*([A-Z0-9]+(?:[\s\-][A-Z0-9]+)*)/i
     );
 
     if (paxNameMatch) {
@@ -325,7 +325,10 @@ export function parseMassFLST(text: string, selectedCategory: string): MassPasse
         }
       } else if (
         currentPax.remarks &&
-        !trimmedLine.match(/^(?:CAN|DAC|CGP|BKK|SIN|KUL|DXB|AUH|SHJ|RUH|JED|SPD|ZYL|CXB|JSR|RJH|BZL)\b/)
+        !trimmedLine.match(/^(?:CAN|DAC|CGP|BKK|SIN|KUL|DXB|AUH|SHJ|RUH|JED|SPD|ZYL|CXB|JSR|RJH|BZL)\b/) &&
+        !trimmedLine.match(/\b(?:ETKT|TKNE)\b/i) &&
+        !trimmedLine.match(/[A-Z]+\s*\/\s*[A-Z]/i) &&
+        !trimmedLine.match(/^\s*(?:\d+\s+){2,}[A-Z]+/i)
       ) {
         currentPax.remarks = `${currentPax.remarks} ${trimmedLine}`.trim();
       }
@@ -999,21 +1002,6 @@ export const MassFormModule: React.FC<Props> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  showToast('SYNCING LATEST MASS REPORTS FROM CLOUD...');
-                  const synced = await syncMassReportsFromCloud();
-                  setCloudMassReports(synced);
-                  showToast(`SYNC COMPLETE! (${synced.length} REPORTS CACHED)`);
-                }}
-                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-1.5 transition-all"
-                title="Checks and syncs latest MASS reports from cloud without continuous quota cost"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>SYNC / REFRESH</span>
-              </button>
-
               <button
                 type="button"
                 onClick={() => setShowAllDatesInMassHistory((prev) => !prev)}

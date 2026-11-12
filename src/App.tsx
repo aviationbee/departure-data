@@ -46,6 +46,7 @@ import {
   restoreStationBackupJson,
   getCachedFlightReports,
   syncFlightReportsFromCloud,
+  syncMassReportsFromCloud,
   StoredFlightReport,
   SystemNoticeDoc,
 } from './firebase';
@@ -418,6 +419,27 @@ export default function App() {
       unsubFlights();
     };
   }, []);
+
+  const [isGlobalSyncing, setIsGlobalSyncing] = useState(false);
+
+  const handleGlobalSync = async () => {
+    setIsGlobalSyncing(true);
+    showToast('SYNCING ALL FLIGHT & MASS DATA FROM CLOUD...');
+    try {
+      const [syncedFlights, syncedMass] = await Promise.all([
+        syncFlightReportsFromCloud(),
+        syncMassReportsFromCloud(),
+      ]);
+      setCloudFlightReports(syncedFlights);
+      showToast(
+        `SYNC COMPLETE! (${syncedFlights.length} FLIGHTS, ${syncedMass.length} MASS REPORTS CACHED)`
+      );
+    } catch {
+      showToast('SYNC COMPLETED (USING LOCAL CACHE)');
+    } finally {
+      setIsGlobalSyncing(false);
+    }
+  };
 
   // 2-Hour Inactivity Auto-Logout (7,200,000 ms)
   useEffect(() => {
@@ -1302,6 +1324,17 @@ export default function App() {
 
             <div className="flex flex-col gap-4 max-w-sm mx-auto">
               <button
+                type="button"
+                onClick={handleGlobalSync}
+                disabled={isGlobalSyncing}
+                className="py-3.5 px-6 rounded-xl bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-extrabold tracking-widest shadow-xl hover:shadow-sky-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm border border-sky-400/40 flex items-center justify-center gap-2.5 cursor-pointer uppercase"
+                title="Sync and refresh all flight data and reports from cloud database for full app"
+              >
+                <RotateCcw className={`w-4 h-4 ${isGlobalSyncing ? 'animate-spin' : ''}`} />
+                <span>{isGlobalSyncing ? 'SYNCING ALL DATA...' : 'SYNC / REFRESH'}</span>
+              </button>
+
+              <button
                 onClick={() => goToDataPage('data-dom', 'dom')}
                 className="py-4 px-6 rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-extrabold tracking-widest shadow-lg hover:shadow-sky-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm md:text-base border border-sky-400/30 flex items-center justify-center gap-3 cursor-pointer uppercase"
               >
@@ -1391,21 +1424,6 @@ export default function App() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    showToast('SYNCING LATEST FLIGHTS FROM CLOUD...');
-                    const synced = await syncFlightReportsFromCloud();
-                    setCloudFlightReports(synced);
-                    showToast(`SYNC COMPLETE! (${synced.length} FLIGHTS CACHED)`);
-                  }}
-                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-black text-xs tracking-wider uppercase shadow-lg cursor-pointer flex items-center justify-center gap-1.5 transition-all"
-                  title="Checks and syncs latest flights from cloud without background quota cost"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>SYNC / REFRESH</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={handleDownloadStationSavedExcel}

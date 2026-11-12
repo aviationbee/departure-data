@@ -15,6 +15,9 @@ import {
   deleteMassReportFromCloud,
   reconstructFormDataFromStoredReport,
   logUserActivity,
+  syncFlightReportsFromCloud,
+  syncMassReportsFromCloud,
+  normalizeDateToIso,
 } from '../firebase';
 import {
   exportStandardFlightReportsXlsx,
@@ -112,8 +115,11 @@ export const AdminModule: React.FC<Props> = ({
   const [savedMassSearch, setSavedMassSearch] = useState<string>('');
   const [activeMassReportPreview, setActiveMassReportPreview] = useState<StoredMassReport | null>(null);
 
-  // Real-time Firestore subscriptions
+  // Real-time Firestore subscriptions with initial cloud fetch
   useEffect(() => {
+    syncFlightReportsFromCloud().catch(() => {});
+    syncMassReportsFromCloud().catch(() => {});
+
     const unsubReports = subscribeToFlightReports((reports) => {
       setFlightReports(reports);
     });
@@ -202,10 +208,23 @@ export const AdminModule: React.FC<Props> = ({
     setLoginError('INVALID ADMIN PASSWORD! PLEASE CHECK AND TRY AGAIN.');
   };
 
+  // Helper to extract ISO date (YYYY-MM-DD) from a report
+  const getReportIsoDate = (r: StoredFlightReport): string => {
+    const fromDate = normalizeDateToIso(r.date);
+    if (fromDate) return fromDate;
+    if (r.createdAt) {
+      const fromCreated = r.createdAt.split('T')[0];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fromCreated)) return fromCreated;
+    }
+    return '';
+  };
+
   // Filter Flight Reports based on Role, Station, Date (>= STORAGE_START_DATE), and Search
   const filteredReports = flightReports.filter((r) => {
-    // Hide any record prior to STORAGE_START_DATE
-    if (r.date < STORAGE_START_DATE) return false;
+    const repDateIso = getReportIsoDate(r);
+
+    // Hide any record strictly prior to STORAGE_START_DATE (only when date is reliably known)
+    if (repDateIso && repDateIso < STORAGE_START_DATE) return false;
 
     // Station Isolation
     if (adminRole === 'station') {
@@ -218,7 +237,12 @@ export const AdminModule: React.FC<Props> = ({
 
     // Date filter
     if (!showAllDates && selectedDate) {
-      if (r.date !== selectedDate) return false;
+      const selDateIso = normalizeDateToIso(selectedDate);
+      if (repDateIso && selDateIso) {
+        if (repDateIso !== selDateIso) return false;
+      } else {
+        if (r.date !== selectedDate) return false;
+      }
     }
 
     // Search query
@@ -569,7 +593,8 @@ export const AdminModule: React.FC<Props> = ({
         return false;
       }
       if (savedFlightTodayOnly) {
-        const isTodayDate = r.date === todayIso || r.date === todayLocal;
+        const repIso = getReportIsoDate(r);
+        const isTodayDate = repIso === todayIso || r.date === todayIso || r.date === todayLocal;
         const isCreatedToday =
           r.createdAt &&
           (r.createdAt.startsWith(todayIso) ||
