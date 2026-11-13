@@ -4,6 +4,7 @@ import {
   saveMassReportToCloud,
   deleteMassReportFromCloud,
   subscribeToMassReports,
+  syncMassReportsFromCloud,
   getCachedMassReports,
   exportStationBackupJson,
   restoreStationBackupJson,
@@ -452,15 +453,24 @@ export const MassFormModule: React.FC<Props> = ({
     }
   }, [currentPage]);
 
-  // Real-time subscription to MASS Reports for the logged-in station
+  // Local-first subscription to MASS Reports (0 background cloud reads while entering forms)
   useEffect(() => {
-    const unsub = subscribeToMassReports((reports) => {
-      setCloudMassReports(reports);
-    });
+    const unsub = subscribeToMassReports(
+      (reports) => {
+        setCloudMassReports(reports);
+      },
+      { realtime: false }
+    );
     return () => {
       unsub();
     };
   }, []);
+
+  // Trigger Smart Delta / Full Sync ONLY when officer opens SAVED REPORTS HISTORY
+  useEffect(() => {
+    if (currentPage !== 'mass-history') return;
+    syncMassReportsFromCloud(showAllDatesInMassHistory ? 'full' : 'smart').catch(() => {});
+  }, [currentPage, showAllDatesInMassHistory]);
 
   const currentStationCode = (userInfo.stationName || 'DAC').trim().toUpperCase();
   const stationHistoryList: MassHistoryItem[] = cloudMassReports

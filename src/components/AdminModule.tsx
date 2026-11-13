@@ -17,6 +17,9 @@ import {
   logUserActivity,
   normalizeDateToIso,
   subscribeToQuotaStatus,
+  syncFlightReportsFromCloud,
+  syncMassReportsFromCloud,
+  fetchActivityLogsOnce,
 } from '../firebase';
 import {
   exportStandardFlightReportsXlsx,
@@ -130,22 +133,48 @@ export const AdminModule: React.FC<Props> = ({
     };
   }, []);
 
-  // Subscribe to Flight & MASS reports only after Admin is unlocked (uses localStorage + incremental onSnapshot)
+  // Flight Reports: attach delta-only live listener ONLY while Admin is viewing flight dashboard/saved-flight
+  const isAdminFlightPage =
+    adminRole !== null &&
+    (currentPage === 'admin-dashboard' || currentPage === 'admin-saved-flight');
+
   useEffect(() => {
-    if (!adminRole) return;
-    const unsubReports = subscribeToFlightReports((reports) => {
-      setFlightReports(reports);
-    });
-    const unsubMass = subscribeToMassReports((reports) => {
-      setMassReports(reports);
-    });
+    if (!isAdminFlightPage) return;
+    const unsubReports = subscribeToFlightReports(
+      (reports) => {
+        setFlightReports(reports);
+      },
+      { realtime: true }
+    );
+    const yesterdayIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const needsFullArchive =
+      currentPage === 'admin-saved-flight' ||
+      showAllDates ||
+      (selectedDate && selectedDate < yesterdayIso);
+    syncFlightReportsFromCloud(needsFullArchive ? 'full' : 'smart').catch(() => {});
     return () => {
       unsubReports();
+    };
+  }, [isAdminFlightPage, currentPage, showAllDates, selectedDate]);
+
+  // MASS Reports: attach delta-only live listener ONLY when Super Admin opens SAVED MAAS FORM
+  const isAdminMassPage = adminRole === 'super' && currentPage === 'admin-saved-maas';
+
+  useEffect(() => {
+    if (!isAdminMassPage) return;
+    const unsubMass = subscribeToMassReports(
+      (reports) => {
+        setMassReports(reports);
+      },
+      { realtime: true }
+    );
+    syncMassReportsFromCloud('full').catch(() => {});
+    return () => {
       unsubMass();
     };
-  }, [adminRole]);
+  }, [isAdminMassPage]);
 
-  // Lazy-load Activity Logs only when Super Admin actually opens the LOG CHECK page
+  // One-shot Activity Logs fetch (no permanent listener) ONLY when Super Admin opens LOG CHECK
   useEffect(() => {
     if (adminRole !== 'super' || currentPage !== 'admin-logs') return;
     const unsubLogs = subscribeToActivityLogs((logs) => {
@@ -518,14 +547,31 @@ export const AdminModule: React.FC<Props> = ({
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleDownloadLogsExcel(filteredLogs)}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-lg uppercase"
-            >
-              <Download className="w-4 h-4" />
-              <span>DOWNLOAD LOGS (EXCEL)</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  fetchActivityLogsOnce(true)
+                    .then((logs) => {
+                      setActivityLogs(logs);
+                      showToast(`LOGS REFRESHED (${logs.length} LATEST ENTRIES)`);
+                    })
+                    .catch(() => {});
+                }}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer shadow-lg uppercase"
+              >
+                <Activity className="w-4 h-4" />
+                <span>REFRESH LOGS</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownloadLogsExcel(filteredLogs)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-lg uppercase"
+              >
+                <Download className="w-4 h-4" />
+                <span>DOWNLOAD LOGS (EXCEL)</span>
+              </button>
+            </div>
           </div>
 
           {/* Activity Logs Table */}

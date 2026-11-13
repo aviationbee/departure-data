@@ -33,6 +33,14 @@ export const db = initializeFirestore(
 export const CACHED_FLIGHT_REPORTS_KEY = 'usba_cached_flight_reports_backup';
 export const CACHED_MASS_REPORTS_KEY = 'usba_cached_mass_reports_backup';
 export const CACHED_SYSTEM_NOTICE_KEY = 'usba_cached_system_notice_backup';
+export const FLIGHT_LAST_SYNC_KEY = 'usba_flight_last_sync_iso';
+export const FLIGHT_FULL_SYNC_TS_KEY = 'usba_flight_full_sync_ts';
+export const MASS_LAST_SYNC_KEY = 'usba_mass_last_sync_iso';
+export const MASS_FULL_SYNC_TS_KEY = 'usba_mass_full_sync_ts';
+
+const SMART_SYNC_COOLDOWN_MS = 90 * 1000;
+const FULL_15D_COOLDOWN_MS = 10 * 60 * 1000;
+const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 
 export function mergeFlightReports(
   existing: StoredFlightReport[],
@@ -267,6 +275,7 @@ export interface StoredFlightReport {
   preparedBy: string;
   usbaId: string;
   createdAt: string;
+  updatedAt?: string;
   expiresAt: number;
   sourceModule?: 'load-control' | 'standard';
   rawFormData?: FlightFormData;
@@ -329,6 +338,7 @@ export interface StoredMassReport {
   usbaId: string;
   designation?: string;
   createdAt: string;
+  updatedAt?: string;
   expiresAt: number;
 }
 
@@ -422,6 +432,7 @@ export async function saveFlightReportToCloud(
     : `${station}_${date}_${flightNo.replace(/[^A-Z0-9]/g, '')}`;
   const now = Date.now();
   const createdAt = originalCreatedAt || new Date(now).toISOString();
+  const updatedAt = new Date(now).toISOString();
   const expiresAt = now + NINETY_DAYS_MS;
 
   const payload: Omit<StoredFlightReport, 'id'> = {
@@ -484,6 +495,7 @@ export async function saveFlightReportToCloud(
     preparedBy: userInfo.userName || 'OFFICER',
     usbaId: userInfo.usbaId || '',
     createdAt,
+    updatedAt,
     expiresAt,
     rawFormData: formData,
   };
@@ -545,6 +557,7 @@ export async function saveMassReportToCloud(
   const station = (userInfo.stationName || 'DAC').trim().toUpperCase();
   const now = Date.now();
   const createdAt = new Date(now).toISOString();
+  const updatedAt = createdAt;
   const expiresAt = now + NINETY_DAYS_MS;
   const docId = `${station}_${item.id}`;
 
@@ -559,6 +572,7 @@ export async function saveMassReportToCloud(
     usbaId: (userInfo.usbaId || '').toUpperCase(),
     designation: (item.designation || 'EXECUTIVE').toUpperCase(),
     createdAt,
+    updatedAt,
     expiresAt,
   };
 
@@ -645,109 +659,229 @@ export async function circulateAdminNotice(
   }
 }
 
-function getIncrementalCursorIso(
-  reports: { createdAt?: string }[],
-  overlapMs = 30 * 60 * 1000
-): string | null {
-  if (!reports || reports.length === 0) return null;
-  let maxMs = 0;
-  for (const r of reports) {
-    if (r.createdAt) {
-      const ms = Date.parse(r.createdAt);
-      if (!isNaN(ms) && ms > maxMs) maxMs = ms;
-    }
-  }
-  if (maxMs <= 0) return null;
-  const fifteenDaysCutoff = Date.now() - FIFTEEN_DAYS_MS;
-  const cursorMs = Math.max(fifteenDaysCutoff, maxMs - overlapMs);
-  return new Date(cursorMs).toISOString();
+export type CloudSyncMode = 'smart' | 'today' | 'full';
+
+function normalizeSyncMode(modeOrForce: CloudSyncMode | boolean): CloudSyncMode {
+  if (modeOrForce === true) return 'full';
+  if (modeOrForce === false || !modeOrForce) return 'smart';
+  return modeOrForce;
 }
 
-// On-Demand Cloud Sync (incremental by default; pass forceFull=true for full 150-doc refresh)
-export async function syncFlightReportsFromCloud(forceFull = false): Promise<StoredFlightReport[]> {
+function getSafeStorageItem(key: string): string | null {
   try {
-    const cached = getCachedFlightReports();
-    const cursorIso = !forceFull ? getIncrementalCursorIso(cached) : null;
-    const q = cursorIso
-      ? query(
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function setSafeStorageItem(key: string, val: string): void {
+  try {
+    localStorage.setItem(key, val);
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+let inFlightFlightSync: Promise<StoredFlightReport[]> | null = null;
+let inFlightMassSync: Promise<StoredMassReport[]> | null = null;
+
+// Smart Quota-Preserving Sync for Flight Reports:
+// - 'smart': 90s cooldown -> 48h initial load on fresh device -> updatedAt delta afterwards
+// - 'today': bypasses 90s cooldown, loads last 48h createdAt (used by SYNC / REFRESH button)
+// - 'full' : loads 15-day archive (limit 150) with 10-min cooldown (used only when clicking ALL DATES / ALL 15 DAYS)
+export async function syncFlightReportsFromCloud(
+  modeOrForce: CloudSyncMode | boolean = 'smart'
+): Promise<StoredFlightReport[]> {
+  const mode = normalizeSyncMode(modeOrForce);
+  const cached = getCachedFlightReports();
+  const now = Date.now();
+
+  if (mode === 'smart' && cached.length > 0) {
+    const lastSyncIso = getSafeStorageItem(FLIGHT_LAST_SYNC_KEY);
+    if (lastSyncIso) {
+      const lastSyncMs = Date.parse(lastSyncIso);
+      if (!isNaN(lastSyncMs) && now - lastSyncMs < SMART_SYNC_COOLDOWN_MS) {
+        return cached;
+      }
+    }
+  }
+
+  if (mode === 'full' && cached.length > 0) {
+    const lastFullTs = Number(getSafeStorageItem(FLIGHT_FULL_SYNC_TS_KEY) || '0');
+    if (lastFullTs > 0 && now - lastFullTs < FULL_15D_COOLDOWN_MS) {
+      return cached;
+    }
+  }
+
+  if (inFlightFlightSync) {
+    return inFlightFlightSync;
+  }
+
+  inFlightFlightSync = (async () => {
+    try {
+      const lastSyncIso = getSafeStorageItem(FLIGHT_LAST_SYNC_KEY);
+      const lastSyncMs = lastSyncIso ? Date.parse(lastSyncIso) : NaN;
+      const hasValidDeltaCursor =
+        mode === 'smart' && cached.length > 0 && !isNaN(lastSyncMs) && lastSyncMs > 0;
+
+      let q;
+      if (mode === 'full') {
+        q = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(150));
+      } else if (hasValidDeltaCursor) {
+        const deltaCursorIso = new Date(Math.max(now - FIFTEEN_DAYS_MS, lastSyncMs - 2 * 60 * 1000)).toISOString();
+        q = query(
           collection(db, 'flight_reports'),
-          where('createdAt', '>=', cursorIso),
+          where('updatedAt', '>=', deltaCursorIso),
+          orderBy('updatedAt', 'desc'),
+          limit(80)
+        );
+      } else {
+        const recent48hIso = new Date(now - FORTY_EIGHT_HOURS_MS).toISOString();
+        q = query(
+          collection(db, 'flight_reports'),
+          where('createdAt', '>=', recent48hIso),
           orderBy('createdAt', 'desc'),
-          limit(150)
-        )
-      : query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(150));
-
-    const snapshot = await getDocs(q);
-    clearQuotaExceeded();
-    const currentNow = Date.now();
-    const cutoff = currentNow - FIFTEEN_DAYS_MS;
-    const list: StoredFlightReport[] = [];
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data() as Omit<StoredFlightReport, 'id'>;
-      const cTime = data.createdAt ? new Date(data.createdAt).getTime() : currentNow;
-      if (cTime >= cutoff && (!data.expiresAt || data.expiresAt > currentNow)) {
-        list.push({ id: docSnap.id, ...data });
+          limit(80)
+        );
       }
-    });
-    const merged = mergeFlightReports(cached, list).filter((r) => {
-      const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
-      return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
-    });
-    saveCachedFlightReports(merged, true);
-    flightReportSubscribers.forEach((cb) => cb(merged));
-    return merged;
-  } catch (err: any) {
-    console.warn('syncFlightReportsFromCloud warning:', err);
-    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
-      notifyQuotaExceeded();
+
+      const snapshot = await getDocs(q);
+      clearQuotaExceeded();
+      const currentNow = Date.now();
+      const cutoff = currentNow - FIFTEEN_DAYS_MS;
+      const list: StoredFlightReport[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Omit<StoredFlightReport, 'id'>;
+        const cTime = data.createdAt ? new Date(data.createdAt).getTime() : currentNow;
+        if (cTime >= cutoff && (!data.expiresAt || data.expiresAt > currentNow)) {
+          list.push({ id: docSnap.id, ...data });
+        }
+      });
+
+      const merged = mergeFlightReports(getCachedFlightReports(), list).filter((r) => {
+        const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
+        return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
+      });
+      saveCachedFlightReports(merged, true);
+      setSafeStorageItem(FLIGHT_LAST_SYNC_KEY, new Date(currentNow).toISOString());
+      if (mode === 'full') {
+        setSafeStorageItem(FLIGHT_FULL_SYNC_TS_KEY, String(currentNow));
+      }
+      flightReportSubscribers.forEach((cb) => cb(merged));
+      return merged;
+    } catch (err: any) {
+      console.warn('syncFlightReportsFromCloud warning:', err);
+      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+        notifyQuotaExceeded();
+      }
+      return getCachedFlightReports();
+    } finally {
+      inFlightFlightSync = null;
     }
-    return getCachedFlightReports();
-  }
+  })();
+
+  return inFlightFlightSync;
 }
 
-export async function syncMassReportsFromCloud(forceFull = false): Promise<StoredMassReport[]> {
-  try {
-    const cached = getCachedMassReports();
-    const cursorIso = !forceFull ? getIncrementalCursorIso(cached) : null;
-    const q = cursorIso
-      ? query(
-          collection(db, 'mass_reports'),
-          where('createdAt', '>=', cursorIso),
-          orderBy('createdAt', 'desc'),
-          limit(150)
-        )
-      : query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(150));
+export async function syncMassReportsFromCloud(
+  modeOrForce: CloudSyncMode | boolean = 'smart'
+): Promise<StoredMassReport[]> {
+  const mode = normalizeSyncMode(modeOrForce);
+  const cached = getCachedMassReports();
+  const now = Date.now();
 
-    const snapshot = await getDocs(q);
-    clearQuotaExceeded();
-    const currentNow = Date.now();
-    const cutoff = currentNow - FIFTEEN_DAYS_MS;
-    const list: StoredMassReport[] = [];
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data() as Omit<StoredMassReport, 'id'>;
-      const cTime = data.createdAt ? new Date(data.createdAt).getTime() : currentNow;
-      if (cTime >= cutoff && (!data.expiresAt || data.expiresAt > currentNow)) {
-        list.push({ id: docSnap.id, ...data });
+  if (mode === 'smart' && cached.length > 0) {
+    const lastSyncIso = getSafeStorageItem(MASS_LAST_SYNC_KEY);
+    if (lastSyncIso) {
+      const lastSyncMs = Date.parse(lastSyncIso);
+      if (!isNaN(lastSyncMs) && now - lastSyncMs < SMART_SYNC_COOLDOWN_MS) {
+        return cached;
       }
-    });
-    const merged = mergeMassReports(cached, list).filter((r) => {
-      const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
-      return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
-    });
-    saveCachedMassReports(merged, true);
-    massReportSubscribers.forEach((cb) => cb(merged));
-    return merged;
-  } catch (err: any) {
-    console.warn('syncMassReportsFromCloud warning:', err);
-    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
-      notifyQuotaExceeded();
     }
-    return getCachedMassReports();
   }
+
+  if (mode === 'full' && cached.length > 0) {
+    const lastFullTs = Number(getSafeStorageItem(MASS_FULL_SYNC_TS_KEY) || '0');
+    if (lastFullTs > 0 && now - lastFullTs < FULL_15D_COOLDOWN_MS) {
+      return cached;
+    }
+  }
+
+  if (inFlightMassSync) {
+    return inFlightMassSync;
+  }
+
+  inFlightMassSync = (async () => {
+    try {
+      const lastSyncIso = getSafeStorageItem(MASS_LAST_SYNC_KEY);
+      const lastSyncMs = lastSyncIso ? Date.parse(lastSyncIso) : NaN;
+      const hasValidDeltaCursor =
+        mode === 'smart' && cached.length > 0 && !isNaN(lastSyncMs) && lastSyncMs > 0;
+
+      let q;
+      if (mode === 'full') {
+        q = query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(150));
+      } else if (hasValidDeltaCursor) {
+        const deltaCursorIso = new Date(Math.max(now - FIFTEEN_DAYS_MS, lastSyncMs - 2 * 60 * 1000)).toISOString();
+        q = query(
+          collection(db, 'mass_reports'),
+          where('updatedAt', '>=', deltaCursorIso),
+          orderBy('updatedAt', 'desc'),
+          limit(60)
+        );
+      } else {
+        const recent48hIso = new Date(now - FORTY_EIGHT_HOURS_MS).toISOString();
+        q = query(
+          collection(db, 'mass_reports'),
+          where('createdAt', '>=', recent48hIso),
+          orderBy('createdAt', 'desc'),
+          limit(60)
+        );
+      }
+
+      const snapshot = await getDocs(q);
+      clearQuotaExceeded();
+      const currentNow = Date.now();
+      const cutoff = currentNow - FIFTEEN_DAYS_MS;
+      const list: StoredMassReport[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Omit<StoredMassReport, 'id'>;
+        const cTime = data.createdAt ? new Date(data.createdAt).getTime() : currentNow;
+        if (cTime >= cutoff && (!data.expiresAt || data.expiresAt > currentNow)) {
+          list.push({ id: docSnap.id, ...data });
+        }
+      });
+
+      const merged = mergeMassReports(getCachedMassReports(), list).filter((r) => {
+        const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
+        return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
+      });
+      saveCachedMassReports(merged, true);
+      setSafeStorageItem(MASS_LAST_SYNC_KEY, new Date(currentNow).toISOString());
+      if (mode === 'full') {
+        setSafeStorageItem(MASS_FULL_SYNC_TS_KEY, String(currentNow));
+      }
+      massReportSubscribers.forEach((cb) => cb(merged));
+      return merged;
+    } catch (err: any) {
+      console.warn('syncMassReportsFromCloud warning:', err);
+      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+        notifyQuotaExceeded();
+      }
+      return getCachedMassReports();
+    } finally {
+      inFlightMassSync = null;
+    }
+  })();
+
+  return inFlightMassSync;
 }
 
 let flightReportsSnapshotUnsub: (() => void) | null = null;
+let flightRealtimeRefCount = 0;
 let massReportsSnapshotUnsub: (() => void) | null = null;
+let massRealtimeRefCount = 0;
 
 // Cross-tab synchronization via storage event (0ms instantaneous updates across tabs)
 if (typeof window !== 'undefined') {
@@ -758,23 +892,28 @@ if (typeof window !== 'undefined') {
     } else if (e.key === CACHED_MASS_REPORTS_KEY) {
       const updated = getCachedMassReports();
       massReportSubscribers.forEach((cb) => cb(updated));
+    } else if (e.key === CACHED_SYSTEM_NOTICE_KEY) {
+      try {
+        const parsed = e.newValue ? (JSON.parse(e.newValue) as SystemNoticeDoc | null) : null;
+        systemNoticeSubscribers.forEach((cb) => cb(parsed));
+      } catch {
+        // ignore parse failure
+      }
     }
   });
 }
 
+// Lightweight delta-only onSnapshot listener (only attached when Admin views live dashboard)
 export function ensureFlightReportsSnapshotListener(): void {
   if (flightReportsSnapshotUnsub) return;
   try {
-    const cached = getCachedFlightReports();
-    const cursorIso = getIncrementalCursorIso(cached);
-    const q = cursorIso
-      ? query(
-          collection(db, 'flight_reports'),
-          where('createdAt', '>=', cursorIso),
-          orderBy('createdAt', 'desc'),
-          limit(150)
-        )
-      : query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(150));
+    const startDeltaIso = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const q = query(
+      collection(db, 'flight_reports'),
+      where('updatedAt', '>=', startDeltaIso),
+      orderBy('updatedAt', 'desc'),
+      limit(50)
+    );
 
     flightReportsSnapshotUnsub = onSnapshot(
       q,
@@ -790,12 +929,15 @@ export function ensureFlightReportsSnapshotListener(): void {
             incoming.push({ id: docSnap.id, ...data });
           }
         });
-        const merged = mergeFlightReports(getCachedFlightReports(), incoming).filter((r) => {
-          const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
-          return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
-        });
-        saveCachedFlightReports(merged, true);
-        flightReportSubscribers.forEach((cb) => cb(merged));
+        if (incoming.length > 0) {
+          const merged = mergeFlightReports(getCachedFlightReports(), incoming).filter((r) => {
+            const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
+            return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
+          });
+          saveCachedFlightReports(merged, true);
+          setSafeStorageItem(FLIGHT_LAST_SYNC_KEY, new Date(currentNow).toISOString());
+          flightReportSubscribers.forEach((cb) => cb(merged));
+        }
       },
       (err: any) => {
         console.warn('Real-time flight_reports onSnapshot warning:', err);
@@ -813,16 +955,13 @@ export function ensureFlightReportsSnapshotListener(): void {
 export function ensureMassReportsSnapshotListener(): void {
   if (massReportsSnapshotUnsub) return;
   try {
-    const cached = getCachedMassReports();
-    const cursorIso = getIncrementalCursorIso(cached);
-    const q = cursorIso
-      ? query(
-          collection(db, 'mass_reports'),
-          where('createdAt', '>=', cursorIso),
-          orderBy('createdAt', 'desc'),
-          limit(150)
-        )
-      : query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(150));
+    const startDeltaIso = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const q = query(
+      collection(db, 'mass_reports'),
+      where('updatedAt', '>=', startDeltaIso),
+      orderBy('updatedAt', 'desc'),
+      limit(50)
+    );
 
     massReportsSnapshotUnsub = onSnapshot(
       q,
@@ -838,12 +977,15 @@ export function ensureMassReportsSnapshotListener(): void {
             incoming.push({ id: docSnap.id, ...data });
           }
         });
-        const merged = mergeMassReports(getCachedMassReports(), incoming).filter((r) => {
-          const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
-          return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
-        });
-        saveCachedMassReports(merged, true);
-        massReportSubscribers.forEach((cb) => cb(merged));
+        if (incoming.length > 0) {
+          const merged = mergeMassReports(getCachedMassReports(), incoming).filter((r) => {
+            const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
+            return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
+          });
+          saveCachedMassReports(merged, true);
+          setSafeStorageItem(MASS_LAST_SYNC_KEY, new Date(currentNow).toISOString());
+          massReportSubscribers.forEach((cb) => cb(merged));
+        }
       },
       (err: any) => {
         console.warn('Real-time mass_reports onSnapshot warning:', err);
@@ -882,108 +1024,189 @@ export function normalizeDateToIso(d?: string | null): string {
   return '';
 }
 
-// Subscribe to Flight Reports (Serves instantly from Local Storage and stays updated in real time via onSnapshot)
+// Subscribe to Flight Reports:
+// - Serves instantly from localStorage (0 reads)
+// - Only attaches delta-only live onSnapshot when { realtime: true } (Admin pages)
 export function subscribeToFlightReports(
-  callback: (reports: StoredFlightReport[]) => void
+  callback: (reports: StoredFlightReport[]) => void,
+  options?: { realtime?: boolean }
 ) {
   flightReportSubscribers.add(callback);
 
   const now = Date.now();
   const fifteenDaysCutoff = now - FIFTEEN_DAYS_MS;
 
-  // Immediately emit cached reports from localStorage (0 latency!)
   const cached = getCachedFlightReports().filter((r) => {
     const cTime = r.createdAt ? new Date(r.createdAt).getTime() : now;
     return cTime >= fifteenDaysCutoff && (!r.expiresAt || r.expiresAt > now);
   });
   callback(cached);
 
-  // Ensure persistent real-time snapshot listener is active
-  ensureFlightReportsSnapshotListener();
+  const wantsRealtime = Boolean(options?.realtime);
+  if (wantsRealtime) {
+    flightRealtimeRefCount += 1;
+    ensureFlightReportsSnapshotListener();
+  }
 
   return () => {
     flightReportSubscribers.delete(callback);
+    if (wantsRealtime) {
+      flightRealtimeRefCount = Math.max(0, flightRealtimeRefCount - 1);
+      if (flightRealtimeRefCount === 0 && flightReportsSnapshotUnsub) {
+        flightReportsSnapshotUnsub();
+        flightReportsSnapshotUnsub = null;
+      }
+    }
   };
 }
 
-// Subscribe to MASS Reports (Serves instantly from Local Storage and stays updated in real time via onSnapshot)
+// Subscribe to MASS Reports:
+// - Serves instantly from localStorage (0 reads)
+// - Only attaches delta-only live onSnapshot when { realtime: true } (Admin SAVED MAAS page)
 export function subscribeToMassReports(
-  callback: (reports: StoredMassReport[]) => void
+  callback: (reports: StoredMassReport[]) => void,
+  options?: { realtime?: boolean }
 ) {
   massReportSubscribers.add(callback);
 
   const now = Date.now();
   const fifteenDaysCutoff = now - FIFTEEN_DAYS_MS;
 
-  // Immediately emit cached reports from localStorage (0 latency!)
   const cached = getCachedMassReports().filter((r) => {
     const cTime = r.createdAt ? new Date(r.createdAt).getTime() : now;
     return cTime >= fifteenDaysCutoff && (!r.expiresAt || r.expiresAt > now);
   });
   callback(cached);
 
-  // Ensure persistent real-time snapshot listener is active
-  ensureMassReportsSnapshotListener();
+  const wantsRealtime = Boolean(options?.realtime);
+  if (wantsRealtime) {
+    massRealtimeRefCount += 1;
+    ensureMassReportsSnapshotListener();
+  }
 
   return () => {
     massReportSubscribers.delete(callback);
+    if (wantsRealtime) {
+      massRealtimeRefCount = Math.max(0, massRealtimeRefCount - 1);
+      if (massRealtimeRefCount === 0 && massReportsSnapshotUnsub) {
+        massReportsSnapshotUnsub();
+        massReportsSnapshotUnsub = null;
+      }
+    }
   };
 }
 
-// Subscribe to Activity Logs in real-time (capped at 100 latest entries to conserve daily quota)
+let cachedActivityLogs: ActivityLogEntry[] = [];
+let lastActivityLogsFetchTs = 0;
+const ACTIVITY_LOGS_COOLDOWN_MS = 60 * 1000;
+
+// One-shot Activity Logs fetch (no background listener; capped at 50 entries with 60s cache)
+export async function fetchActivityLogsOnce(force = false): Promise<ActivityLogEntry[]> {
+  const now = Date.now();
+  if (!force && cachedActivityLogs.length > 0 && now - lastActivityLogsFetchTs < ACTIVITY_LOGS_COOLDOWN_MS) {
+    return cachedActivityLogs;
+  }
+  try {
+    const q = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(50));
+    const snapshot = await getDocs(q);
+    clearQuotaExceeded();
+    const list: ActivityLogEntry[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Omit<ActivityLogEntry, 'id'>;
+      list.push({ id: docSnap.id, ...data });
+    });
+    cachedActivityLogs = list;
+    lastActivityLogsFetchTs = Date.now();
+    activityLogSubscribers.forEach((cb) => cb(list));
+    return list;
+  } catch (err: any) {
+    console.warn('Warning fetching activity_logs:', err);
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+      notifyQuotaExceeded();
+    }
+    return cachedActivityLogs;
+  }
+}
+
 export function subscribeToActivityLogs(
   callback: (logs: ActivityLogEntry[]) => void
 ) {
   activityLogSubscribers.add(callback);
-  const q = query(
-    collection(db, 'activity_logs'),
-    orderBy('timestamp', 'desc'),
-    limit(100)
-  );
-  const unsub = onSnapshot(
-    q,
-    (snapshot) => {
-      const list: ActivityLogEntry[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as Omit<ActivityLogEntry, 'id'>;
-        list.push({ id: docSnap.id, ...data });
-      });
-      callback(list);
-    },
-    (err: any) => {
-      console.warn('Warning subscribing to activity_logs:', err);
-      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
-        notifyQuotaExceeded();
-      }
-    }
-  );
+  if (cachedActivityLogs.length > 0) {
+    callback(cachedActivityLogs);
+  }
+  fetchActivityLogsOnce(false).catch(() => {});
   return () => {
     activityLogSubscribers.delete(callback);
-    unsub();
   };
 }
 
-// Subscribe to Active System Notice in real-time
+let systemNoticeSnapshotUnsub: (() => void) | null = null;
+let systemNoticeRefCount = 0;
+
+function getCachedSystemNotice(): SystemNoticeDoc | null {
+  try {
+    const raw = localStorage.getItem(CACHED_SYSTEM_NOTICE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function refreshSystemNoticeFromCloud(): Promise<SystemNoticeDoc | null> {
+  try {
+    const docSnap = await getDoc(doc(db, 'system_notices', 'current_notice'));
+    clearQuotaExceeded();
+    const notice = docSnap.exists()
+      ? ({ id: docSnap.id, ...(docSnap.data() as Omit<SystemNoticeDoc, 'id'>) } as SystemNoticeDoc)
+      : null;
+    setSafeStorageItem(CACHED_SYSTEM_NOTICE_KEY, JSON.stringify(notice));
+    systemNoticeSubscribers.forEach((cb) => cb(notice));
+    return notice;
+  } catch (err: any) {
+    console.warn('Warning refreshing system_notices:', err);
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+      notifyQuotaExceeded();
+    }
+    return getCachedSystemNotice();
+  }
+}
+
+// Singleton ref-counted subscription to Active System Notice (1 single document)
 export function subscribeToSystemNotice(
   callback: (notice: SystemNoticeDoc | null) => void
 ) {
   systemNoticeSubscribers.add(callback);
-  const unsub = onSnapshot(
-    doc(db, 'system_notices', 'current_notice'),
-    (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data() as Omit<SystemNoticeDoc, 'id'>;
-        callback({ id: docSnap.id, ...data });
-      } else {
-        callback(null);
+  systemNoticeRefCount += 1;
+  callback(getCachedSystemNotice());
+
+  if (!systemNoticeSnapshotUnsub) {
+    systemNoticeSnapshotUnsub = onSnapshot(
+      doc(db, 'system_notices', 'current_notice'),
+      (docSnap) => {
+        clearQuotaExceeded();
+        const notice = docSnap.exists()
+          ? ({ id: docSnap.id, ...(docSnap.data() as Omit<SystemNoticeDoc, 'id'>) } as SystemNoticeDoc)
+          : null;
+        setSafeStorageItem(CACHED_SYSTEM_NOTICE_KEY, JSON.stringify(notice));
+        systemNoticeSubscribers.forEach((cb) => cb(notice));
+      },
+      (err: any) => {
+        console.warn('Warning subscribing to system_notices:', err);
+        systemNoticeSnapshotUnsub = null;
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+          notifyQuotaExceeded();
+        }
       }
-    },
-    (err) => {
-      console.warn('Warning subscribing to system_notices:', err);
-    }
-  );
+    );
+  }
+
   return () => {
     systemNoticeSubscribers.delete(callback);
-    unsub();
+    systemNoticeRefCount = Math.max(0, systemNoticeRefCount - 1);
+    if (systemNoticeRefCount === 0 && systemNoticeSnapshotUnsub) {
+      systemNoticeSnapshotUnsub();
+      systemNoticeSnapshotUnsub = null;
+    }
   };
 }

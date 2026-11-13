@@ -47,6 +47,7 @@ import {
   getCachedFlightReports,
   syncFlightReportsFromCloud,
   syncMassReportsFromCloud,
+  refreshSystemNoticeFromCloud,
   subscribeToQuotaStatus,
   isQuotaExceeded,
   StoredFlightReport,
@@ -408,40 +409,56 @@ export default function App() {
     showToast('LOGGED OUT SUCCESSFULLY.');
   };
 
-  // Track cloud read quota status & live admin notice
+  // Track cloud read quota status & live admin notice (only when logged in)
   useEffect(() => {
     const unsubQuota = subscribeToQuotaStatus((exceeded) => {
       setQuotaExceeded(exceeded);
     });
+    return () => {
+      unsubQuota();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (currentPage === 'identification') return;
     const unsubNotice = subscribeToSystemNotice((notice) => {
       setLiveNotice(notice);
     });
     return () => {
-      unsubQuota();
       unsubNotice();
     };
-  }, []);
+  }, [currentPage === 'identification']);
 
-  // Subscribe to Flight Reports only when user is logged in (avoids wasted reads on login screen)
+  // Local-first subscription to Flight Reports (0 background reads while sitting on input/dashboard pages)
   useEffect(() => {
     if (currentPage === 'identification') return;
-    const unsubFlights = subscribeToFlightReports((reports) => {
-      setCloudFlightReports(reports);
-    });
+    const unsubFlights = subscribeToFlightReports(
+      (reports) => {
+        setCloudFlightReports(reports);
+      },
+      { realtime: false }
+    );
     return () => {
       unsubFlights();
     };
   }, [currentPage === 'identification']);
 
+  // Trigger Smart Delta / Today Cloud Sync ONLY when user opens Saved Flight Data or Saved LDM (90s cooldown)
+  useEffect(() => {
+    if (currentPage !== 'saved-flights') return;
+    syncFlightReportsFromCloud(showAllDatesInSavedFlights ? 'full' : 'smart').catch(() => {});
+  }, [currentPage, showAllDatesInSavedFlights]);
+
   const [isGlobalSyncing, setIsGlobalSyncing] = useState(false);
 
   const handleGlobalSync = async () => {
     setIsGlobalSyncing(true);
-    showToast('SYNCING ALL FLIGHT & MASS DATA FROM CLOUD...');
+    showToast('SYNCING TODAY FLIGHT & MASS DATA FROM CLOUD...');
     try {
       const [syncedFlights, syncedMass] = await Promise.all([
-        syncFlightReportsFromCloud(true),
-        syncMassReportsFromCloud(true),
+        syncFlightReportsFromCloud('today'),
+        syncMassReportsFromCloud('today'),
+        refreshSystemNoticeFromCloud(),
       ]);
       setCloudFlightReports(syncedFlights);
       if (isQuotaExceeded()) {
