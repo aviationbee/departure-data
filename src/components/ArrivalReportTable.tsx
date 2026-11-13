@@ -132,17 +132,17 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
         }}
       >
         {/* Header */}
-        <div className="text-center mb-5 print:mb-3">
-          <h2 className="text-3xl print:text-2xl font-extrabold tracking-widest m-0 uppercase text-black">
+        <div className="text-center mb-5 print:mb-5">
+          <h2 className="text-3xl print:text-[26pt] font-extrabold tracking-widest m-0 uppercase text-black">
             US-BANGLA AIRLINES
           </h2>
-          <h3 className="text-lg print:text-base font-bold border-b-2 border-black pb-1.5 print:pb-1 mt-1 tracking-wider uppercase text-black">
+          <h3 className="text-lg print:text-[14.5pt] font-bold border-b-2 border-black pb-1.5 mt-1 tracking-wider uppercase text-black">
             OFFICIAL FLIGHT ARRIVAL REPORT
           </h3>
         </div>
 
         {/* Arrival Table */}
-        <table className="w-full border-2 border-black border-collapse text-[10.5pt] print:text-[9pt] text-black">
+        <table className="w-full border-2 border-black border-collapse text-[10.5pt] print:text-[11.5pt] text-black">
           <tbody>
             <tr className="border border-black">
               <td className="font-bold p-2 w-[35%] align-top border-r border-black">1. DATE</td>
@@ -160,7 +160,7 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
               <td className="font-bold p-2 align-top border-r border-black">4. ARRIVAL TIME</td>
               <td className="p-2 leading-relaxed">
                 : STA: {data.sta || 'N/A'} LT &nbsp; C/ON: {data.chocksOn || 'N/A'} LT &nbsp; DOOR OPEN: {data.doorOpen || 'N/A'} LT
-                <div className="text-sm print:text-[9pt] font-bold mt-0.5 text-black uppercase">
+                <div className="text-sm print:text-[11.5pt] font-bold mt-0.5 text-black uppercase">
                   : STATUS: {(data.arrivalStatus || 'FLIGHT ON TIME ARRIVED').toUpperCase()}
                 </div>
               </td>
@@ -211,7 +211,7 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
         </table>
 
         {/* Footer Signatures */}
-        <table className="w-full border-2 border-black border-collapse mt-6 print:mt-3 text-[10.5pt] print:text-[9pt] text-black">
+        <table className="w-full border-2 border-black border-collapse mt-6 print:mt-6 text-[10.5pt] print:text-[11.5pt] text-black">
           <tbody>
             <tr className="border border-black">
               <td className="font-bold p-2.5 w-[35%] border-r border-black">PREPARED BY</td>
@@ -222,7 +222,7 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
               <td className="p-2.5">: USBA-{user.usbaId.toUpperCase() || 'N/A'}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2.5 h-14 print:h-10 align-middle border-r border-black">SIGNATURE</td>
+              <td className="font-bold p-2.5 h-14 print:h-14 align-middle border-r border-black">SIGNATURE</td>
               <td className="p-2.5 align-middle">:</td>
             </tr>
           </tbody>
