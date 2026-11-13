@@ -5,7 +5,6 @@ import {
   deleteMassReportFromCloud,
   subscribeToMassReports,
   getCachedMassReports,
-  syncMassReportsFromCloud,
   exportStationBackupJson,
   restoreStationBackupJson,
   StoredMassReport,

@@ -13,6 +13,7 @@ import {
   query,
   orderBy,
   limit,
+  where,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { FlightFormData, UserInfo } from './types';
@@ -154,12 +155,36 @@ export function restoreStationBackupJson(jsonString: string): { restoredFlights:
 }
 
 let quotaExceededNotified = false;
+let quotaExceededState = false;
+const quotaStatusSubscribers = new Set<(exceeded: boolean) => void>();
+
 export function notifyQuotaExceeded(): void {
+  quotaExceededState = true;
+  quotaStatusSubscribers.forEach((cb) => cb(true));
   if (quotaExceededNotified) return;
   quotaExceededNotified = true;
   console.warn(
     'Firestore Quota Exceeded: Daily free read units reached. Serving reports from local persistent cache until quota resets.'
   );
+}
+
+export function clearQuotaExceeded(): void {
+  if (!quotaExceededState) return;
+  quotaExceededState = false;
+  quotaExceededNotified = false;
+  quotaStatusSubscribers.forEach((cb) => cb(false));
+}
+
+export function isQuotaExceeded(): boolean {
+  return quotaExceededState;
+}
+
+export function subscribeToQuotaStatus(callback: (exceeded: boolean) => void): () => void {
+  quotaStatusSubscribers.add(callback);
+  callback(quotaExceededState);
+  return () => {
+    quotaStatusSubscribers.delete(callback);
+  };
 }
 
 // Active subscriber registries for instant activity-based sync without page reload
@@ -472,12 +497,9 @@ export async function saveFlightReportToCloud(
   saveCachedFlightReports(updatedList);
   flightReportSubscribers.forEach((cb) => cb(updatedList));
 
-  // 2. Persist to Cloud Firestore
+  // 2. Persist to Cloud Firestore (no post-save getDocs read — onSnapshot updates listeners directly)
   try {
     await setDoc(doc(db, 'flight_reports', docId), payload);
-    setTimeout(() => {
-      syncFlightReportsFromCloud().catch(() => {});
-    }, 150);
   } catch (err: any) {
     console.warn('Firestore saveFlightReportToCloud warning:', err);
     if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
@@ -547,9 +569,6 @@ export async function saveMassReportToCloud(
 
   try {
     await setDoc(doc(db, 'mass_reports', docId), massData);
-    setTimeout(() => {
-      syncMassReportsFromCloud().catch(() => {});
-    }, 150);
   } catch (err: any) {
     console.warn('Firestore saveMassReportToCloud warning:', err);
     if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
@@ -626,11 +645,40 @@ export async function circulateAdminNotice(
   }
 }
 
-// On-Demand Cloud Sync (only counts reads when editing, generating, or clicking sync - NEVER while app sits open)
-export async function syncFlightReportsFromCloud(): Promise<StoredFlightReport[]> {
+function getIncrementalCursorIso(
+  reports: { createdAt?: string }[],
+  overlapMs = 30 * 60 * 1000
+): string | null {
+  if (!reports || reports.length === 0) return null;
+  let maxMs = 0;
+  for (const r of reports) {
+    if (r.createdAt) {
+      const ms = Date.parse(r.createdAt);
+      if (!isNaN(ms) && ms > maxMs) maxMs = ms;
+    }
+  }
+  if (maxMs <= 0) return null;
+  const fifteenDaysCutoff = Date.now() - FIFTEEN_DAYS_MS;
+  const cursorMs = Math.max(fifteenDaysCutoff, maxMs - overlapMs);
+  return new Date(cursorMs).toISOString();
+}
+
+// On-Demand Cloud Sync (incremental by default; pass forceFull=true for full 150-doc refresh)
+export async function syncFlightReportsFromCloud(forceFull = false): Promise<StoredFlightReport[]> {
   try {
-    const q = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(150));
+    const cached = getCachedFlightReports();
+    const cursorIso = !forceFull ? getIncrementalCursorIso(cached) : null;
+    const q = cursorIso
+      ? query(
+          collection(db, 'flight_reports'),
+          where('createdAt', '>=', cursorIso),
+          orderBy('createdAt', 'desc'),
+          limit(150)
+        )
+      : query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(150));
+
     const snapshot = await getDocs(q);
+    clearQuotaExceeded();
     const currentNow = Date.now();
     const cutoff = currentNow - FIFTEEN_DAYS_MS;
     const list: StoredFlightReport[] = [];
@@ -641,7 +689,7 @@ export async function syncFlightReportsFromCloud(): Promise<StoredFlightReport[]
         list.push({ id: docSnap.id, ...data });
       }
     });
-    const merged = mergeFlightReports(getCachedFlightReports(), list).filter((r) => {
+    const merged = mergeFlightReports(cached, list).filter((r) => {
       const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
       return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
     });
@@ -657,10 +705,21 @@ export async function syncFlightReportsFromCloud(): Promise<StoredFlightReport[]
   }
 }
 
-export async function syncMassReportsFromCloud(): Promise<StoredMassReport[]> {
+export async function syncMassReportsFromCloud(forceFull = false): Promise<StoredMassReport[]> {
   try {
-    const q = query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(150));
+    const cached = getCachedMassReports();
+    const cursorIso = !forceFull ? getIncrementalCursorIso(cached) : null;
+    const q = cursorIso
+      ? query(
+          collection(db, 'mass_reports'),
+          where('createdAt', '>=', cursorIso),
+          orderBy('createdAt', 'desc'),
+          limit(150)
+        )
+      : query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(150));
+
     const snapshot = await getDocs(q);
+    clearQuotaExceeded();
     const currentNow = Date.now();
     const cutoff = currentNow - FIFTEEN_DAYS_MS;
     const list: StoredMassReport[] = [];
@@ -671,7 +730,7 @@ export async function syncMassReportsFromCloud(): Promise<StoredMassReport[]> {
         list.push({ id: docSnap.id, ...data });
       }
     });
-    const merged = mergeMassReports(getCachedMassReports(), list).filter((r) => {
+    const merged = mergeMassReports(cached, list).filter((r) => {
       const cTime = r.createdAt ? new Date(r.createdAt).getTime() : currentNow;
       return cTime >= cutoff && (!r.expiresAt || r.expiresAt > currentNow);
     });
@@ -706,14 +765,21 @@ if (typeof window !== 'undefined') {
 export function ensureFlightReportsSnapshotListener(): void {
   if (flightReportsSnapshotUnsub) return;
   try {
-    const q = query(
-      collection(db, 'flight_reports'),
-      orderBy('createdAt', 'desc'),
-      limit(150)
-    );
+    const cached = getCachedFlightReports();
+    const cursorIso = getIncrementalCursorIso(cached);
+    const q = cursorIso
+      ? query(
+          collection(db, 'flight_reports'),
+          where('createdAt', '>=', cursorIso),
+          orderBy('createdAt', 'desc'),
+          limit(150)
+        )
+      : query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(150));
+
     flightReportsSnapshotUnsub = onSnapshot(
       q,
       (snapshot) => {
+        clearQuotaExceeded();
         const currentNow = Date.now();
         const cutoff = currentNow - FIFTEEN_DAYS_MS;
         const incoming: StoredFlightReport[] = [];
@@ -733,6 +799,7 @@ export function ensureFlightReportsSnapshotListener(): void {
       },
       (err: any) => {
         console.warn('Real-time flight_reports onSnapshot warning:', err);
+        flightReportsSnapshotUnsub = null;
         if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
           notifyQuotaExceeded();
         }
@@ -746,14 +813,21 @@ export function ensureFlightReportsSnapshotListener(): void {
 export function ensureMassReportsSnapshotListener(): void {
   if (massReportsSnapshotUnsub) return;
   try {
-    const q = query(
-      collection(db, 'mass_reports'),
-      orderBy('createdAt', 'desc'),
-      limit(150)
-    );
+    const cached = getCachedMassReports();
+    const cursorIso = getIncrementalCursorIso(cached);
+    const q = cursorIso
+      ? query(
+          collection(db, 'mass_reports'),
+          where('createdAt', '>=', cursorIso),
+          orderBy('createdAt', 'desc'),
+          limit(150)
+        )
+      : query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(150));
+
     massReportsSnapshotUnsub = onSnapshot(
       q,
       (snapshot) => {
+        clearQuotaExceeded();
         const currentNow = Date.now();
         const cutoff = currentNow - FIFTEEN_DAYS_MS;
         const incoming: StoredMassReport[] = [];
@@ -773,6 +847,7 @@ export function ensureMassReportsSnapshotListener(): void {
       },
       (err: any) => {
         console.warn('Real-time mass_reports onSnapshot warning:', err);
+        massReportsSnapshotUnsub = null;
         if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
           notifyQuotaExceeded();
         }
@@ -855,7 +930,7 @@ export function subscribeToMassReports(
   };
 }
 
-// Subscribe to Activity Logs in real-time
+// Subscribe to Activity Logs in real-time (capped at 100 latest entries to conserve daily quota)
 export function subscribeToActivityLogs(
   callback: (logs: ActivityLogEntry[]) => void
 ) {
@@ -863,7 +938,7 @@ export function subscribeToActivityLogs(
   const q = query(
     collection(db, 'activity_logs'),
     orderBy('timestamp', 'desc'),
-    limit(500)
+    limit(100)
   );
   const unsub = onSnapshot(
     q,
@@ -875,8 +950,11 @@ export function subscribeToActivityLogs(
       });
       callback(list);
     },
-    (err) => {
+    (err: any) => {
       console.warn('Warning subscribing to activity_logs:', err);
+      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+        notifyQuotaExceeded();
+      }
     }
   );
   return () => {

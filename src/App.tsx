@@ -47,6 +47,8 @@ import {
   getCachedFlightReports,
   syncFlightReportsFromCloud,
   syncMassReportsFromCloud,
+  subscribeToQuotaStatus,
+  isQuotaExceeded,
   StoredFlightReport,
   SystemNoticeDoc,
 } from './firebase';
@@ -308,6 +310,7 @@ export default function App() {
   const wchrSeatInputRef = React.useRef<HTMLInputElement>(null);
   const wchcSeatInputRef = React.useRef<HTMLInputElement>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [quotaExceeded, setQuotaExceeded] = useState<boolean>(false);
 
   // Sync state to LocalStorage
   useEffect(() => {
@@ -405,20 +408,30 @@ export default function App() {
     showToast('LOGGED OUT SUCCESSFULLY.');
   };
 
-  // Real-time subscription to Super Admin Notice + Flight Reports + Activity-Triggered Instant Cloud Sync (no page refresh required)
+  // Track cloud read quota status & live admin notice
   useEffect(() => {
-    const unsub = subscribeToSystemNotice((notice) => {
+    const unsubQuota = subscribeToQuotaStatus((exceeded) => {
+      setQuotaExceeded(exceeded);
+    });
+    const unsubNotice = subscribeToSystemNotice((notice) => {
       setLiveNotice(notice);
     });
+    return () => {
+      unsubQuota();
+      unsubNotice();
+    };
+  }, []);
+
+  // Subscribe to Flight Reports only when user is logged in (avoids wasted reads on login screen)
+  useEffect(() => {
+    if (currentPage === 'identification') return;
     const unsubFlights = subscribeToFlightReports((reports) => {
       setCloudFlightReports(reports);
     });
-
     return () => {
-      unsub();
       unsubFlights();
     };
-  }, []);
+  }, [currentPage === 'identification']);
 
   const [isGlobalSyncing, setIsGlobalSyncing] = useState(false);
 
@@ -427,13 +440,17 @@ export default function App() {
     showToast('SYNCING ALL FLIGHT & MASS DATA FROM CLOUD...');
     try {
       const [syncedFlights, syncedMass] = await Promise.all([
-        syncFlightReportsFromCloud(),
-        syncMassReportsFromCloud(),
+        syncFlightReportsFromCloud(true),
+        syncMassReportsFromCloud(true),
       ]);
       setCloudFlightReports(syncedFlights);
-      showToast(
-        `SYNC COMPLETE! (${syncedFlights.length} FLIGHTS, ${syncedMass.length} MASS REPORTS CACHED)`
-      );
+      if (isQuotaExceeded()) {
+        showToast('CLOUD DAILY READ QUOTA EXCEEDED (50,000 LIMIT) — SHOWING LOCAL CACHE ONLY');
+      } else {
+        showToast(
+          `SYNC COMPLETE! (${syncedFlights.length} FLIGHTS, ${syncedMass.length} MASS REPORTS CACHED)`
+        );
+      }
     } catch {
       showToast('SYNC COMPLETED (USING LOCAL CACHE)');
     } finally {
@@ -1509,6 +1526,18 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {quotaExceeded && (
+              <div className="mb-5 p-4 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-200 text-xs font-sans flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                <div className="uppercase leading-relaxed">
+                  <span className="font-black text-rose-300 block">
+                    CLOUD DATABASE DAILY READ QUOTA EXCEEDED (50,000 FREE READS/DAY)
+                  </span>
+                  SHOWING LOCAL DEVICE CACHE ONLY. ANOTHER DEVICE WITHOUT LOCAL CACHE CANNOT READ CLOUD DATA UNTIL DAILY QUOTA RESETS TOMORROW OR FIRESTORE IS UPGRADED TO BLAZE PLAN.
+                </div>
+              </div>
+            )}
 
             {/* Full-Day Summary KPIs Display Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 font-sans">

@@ -15,9 +15,8 @@ import {
   deleteMassReportFromCloud,
   reconstructFormDataFromStoredReport,
   logUserActivity,
-  syncFlightReportsFromCloud,
-  syncMassReportsFromCloud,
   normalizeDateToIso,
+  subscribeToQuotaStatus,
 } from '../firebase';
 import {
   exportStandardFlightReportsXlsx,
@@ -50,6 +49,7 @@ import {
   FolderOpen,
   FileText,
   Printer,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface Props {
@@ -114,31 +114,47 @@ export const AdminModule: React.FC<Props> = ({
   const [savedMassStationFilter, setSavedMassStationFilter] = useState<string>('ALL');
   const [savedMassSearch, setSavedMassSearch] = useState<string>('');
   const [activeMassReportPreview, setActiveMassReportPreview] = useState<StoredMassReport | null>(null);
+  const [quotaExceeded, setQuotaExceeded] = useState<boolean>(false);
 
-  // Real-time Firestore subscriptions with initial cloud fetch
+  // Track Firestore quota status & active notice without wasted eager reads
   useEffect(() => {
-    syncFlightReportsFromCloud().catch(() => {});
-    syncMassReportsFromCloud().catch(() => {});
+    const unsubQuota = subscribeToQuotaStatus((exceeded) => {
+      setQuotaExceeded(exceeded);
+    });
+    const unsubNotice = subscribeToSystemNotice((notice) => {
+      setCurrentNotice(notice);
+    });
+    return () => {
+      unsubQuota();
+      unsubNotice();
+    };
+  }, []);
 
+  // Subscribe to Flight & MASS reports only after Admin is unlocked (uses localStorage + incremental onSnapshot)
+  useEffect(() => {
+    if (!adminRole) return;
     const unsubReports = subscribeToFlightReports((reports) => {
       setFlightReports(reports);
     });
     const unsubMass = subscribeToMassReports((reports) => {
       setMassReports(reports);
     });
-    const unsubNotice = subscribeToSystemNotice((notice) => {
-      setCurrentNotice(notice);
-    });
+    return () => {
+      unsubReports();
+      unsubMass();
+    };
+  }, [adminRole]);
+
+  // Lazy-load Activity Logs only when Super Admin actually opens the LOG CHECK page
+  useEffect(() => {
+    if (adminRole !== 'super' || currentPage !== 'admin-logs') return;
     const unsubLogs = subscribeToActivityLogs((logs) => {
       setActivityLogs(logs);
     });
     return () => {
-      unsubReports();
-      unsubMass();
-      unsubNotice();
       unsubLogs();
     };
-  }, []);
+  }, [adminRole, currentPage]);
 
   const handleAdminPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -780,6 +796,18 @@ export const AdminModule: React.FC<Props> = ({
             </div>
           </div>
 
+          {quotaExceeded && (
+            <div className="mb-5 p-4 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-200 text-xs font-sans flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="uppercase leading-relaxed">
+                <span className="font-black text-rose-300 block">
+                  CLOUD DATABASE DAILY READ QUOTA EXCEEDED (50,000 FREE READS/DAY)
+                </span>
+                CURRENTLY SHOWING LOCAL BROWSER CACHE ONLY. ANOTHER DEVICE OR NEW BROWSER WITHOUT LOCAL CACHE WILL SHOW 0 REPORTS UNTIL THE DAILY QUOTA RESETS TOMORROW OR FIRESTORE IS UPGRADED TO BLAZE PLAN.
+              </div>
+            </div>
+          )}
+
           {/* Full-Day Summary KPIs Display Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 font-sans">
             <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 text-center">
@@ -1282,6 +1310,18 @@ export const AdminModule: React.FC<Props> = ({
             />
           </div>
 
+          {quotaExceeded && (
+            <div className="mb-5 p-4 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-200 text-xs font-sans flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="uppercase leading-relaxed">
+                <span className="font-black text-rose-300 block">
+                  CLOUD DATABASE DAILY READ QUOTA EXCEEDED (50,000 FREE READS/DAY)
+                </span>
+                CURRENTLY SHOWING LOCAL BROWSER CACHE ONLY. ANOTHER DEVICE OR NEW BROWSER WITHOUT LOCAL CACHE WILL SHOW 0 REPORTS UNTIL THE DAILY QUOTA RESETS TOMORROW OR FIRESTORE IS UPGRADED TO BLAZE PLAN.
+              </div>
+            </div>
+          )}
+
           {/* Saved MAAS Forms Table */}
           <div className="overflow-x-auto rounded-2xl border border-slate-700 shadow-inner">
             <table className="w-full border-collapse text-xs md:text-sm font-sans uppercase">
@@ -1619,6 +1659,18 @@ export const AdminModule: React.FC<Props> = ({
             </button>
           </div>
         </div>
+
+        {quotaExceeded && (
+          <div className="mb-5 p-4 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-200 text-xs font-sans flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="uppercase leading-relaxed">
+              <span className="font-black text-rose-300 block">
+                CLOUD DATABASE DAILY READ QUOTA EXCEEDED (50,000 FREE READS/DAY)
+              </span>
+              CURRENTLY SHOWING LOCAL BROWSER CACHE ONLY. ANOTHER DEVICE OR NEW BROWSER WITHOUT LOCAL CACHE WILL SHOW 0 REPORTS UNTIL THE DAILY QUOTA RESETS TOMORROW OR FIRESTORE IS UPGRADED TO BLAZE PLAN. (WORKAROUND: EXPORT BACKUP .JSON FROM THE REGULAR DEVICE &amp; RESTORE ON THIS DEVICE.)
+            </div>
+          </div>
+        )}
 
         {/* Full-Day Summary KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 font-sans">
