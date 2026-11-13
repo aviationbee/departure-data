@@ -981,15 +981,15 @@ export const AdminModule: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="w-full flex flex-col items-center gap-8">
+          <div className="mass-report-pages-container w-full flex flex-col items-center gap-8 print:block print:gap-0">
             {Array.from({ length: totalPages }).map((_, pageIdx) => (
               <div
                 key={pageIdx}
-                className="mass-report-page w-full max-w-[850px] bg-white text-black p-6 md:p-10 rounded-xl shadow-2xl uppercase"
+                className="mass-report-page w-full max-w-[850px] bg-white text-black p-6 md:p-10 print:p-0 rounded-xl print:rounded-none shadow-2xl print:shadow-none uppercase"
                 style={{ fontFamily: "'Times New Roman', Times, serif" }}
               >
-                <div className="flex justify-between items-center mb-7 border-b-2 border-black pb-4 gap-4">
-                  <div className="flex flex-col items-start justify-center whitespace-nowrap">
+                <div className="flex justify-between items-center mb-7 print:mb-4 border-b-2 border-black pb-4 print:pb-3 gap-4">
+                  <div className="flex flex-col items-start justify-center whitespace-nowrap shrink-0">
                     <div
                       className="font-black italic text-[26px] text-[#0b2e59] leading-none"
                       style={{ fontFamily: 'Arial, sans-serif' }}
@@ -1005,35 +1005,35 @@ export const AdminModule: React.FC<Props> = ({
                   </div>
 
                   <div
-                    className="flex-1 text-center font-black text-base md:text-lg text-[#0b2e59] tracking-wider bg-[#f0f4f8] py-2.5 px-4 rounded-md border-l-[6px] border-[#0b2e59]"
+                    className="flex-1 min-w-0 text-center font-black text-base md:text-lg print:text-base text-[#0b2e59] tracking-wider bg-[#f0f4f8] py-2.5 px-4 rounded-md border-l-[6px] border-[#0b2e59] whitespace-nowrap"
                     style={{ fontFamily: "'Segoe UI', Arial, sans-serif" }}
                   >
                     MEET AND ASSIST (MASS) HAND OVER LIST
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-base md:text-[18px] font-bold mb-5 text-black">
+                <div className="flex justify-between items-center text-base md:text-[18px] print:text-[15px] font-bold mb-5 print:mb-3 text-black">
                   <div>FLIGHT NO. BS- {activeMassReportPreview.flightNoInput}</div>
                   <div>DATE: {formattedDate}</div>
                   <div>STATION: {stationCode}</div>
                 </div>
 
-                <table className="w-full border-collapse mb-4 table-fixed border border-black text-black">
+                <table className="w-full border-collapse mb-4 print:mb-3 table-fixed border border-black text-black">
                   <thead>
                     <tr className="bg-slate-50/60">
-                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[30%]">
+                      <th className="border border-black px-2 py-2 text-center text-[13px] print:text-[12px] font-bold w-[30%]">
                         NAME OF PASSENGER
                       </th>
-                      <th className="border border-black px-1.5 py-2 text-center text-[13px] font-bold w-[10%]">
+                      <th className="border border-black px-1.5 py-2 text-center text-[13px] print:text-[12px] font-bold w-[10%]">
                         SEAT NO.
                       </th>
-                      <th className="border border-black px-1.5 py-2 text-center text-[13px] font-bold w-[15%]">
+                      <th className="border border-black px-1.5 py-2 text-center text-[13px] print:text-[12px] font-bold w-[15%]">
                         DESTINATION
                       </th>
-                      <th className="border border-black px-1.5 py-2 text-center text-[13px] font-bold w-[13%]">
+                      <th className="border border-black px-1.5 py-2 text-center text-[13px] print:text-[12px] font-bold w-[13%]">
                         CATEGORY
                       </th>
-                      <th className="border border-black px-2 py-2 text-center text-[13px] font-bold w-[32%]">
+                      <th className="border border-black px-2 py-2 text-center text-[13px] print:text-[12px] font-bold w-[32%]">
                         REMARKS
                       </th>
                     </tr>
@@ -1043,20 +1043,20 @@ export const AdminModule: React.FC<Props> = ({
                       const paxIndex = pageIdx * 8 + rowIdx;
                       const pax = passengers[paxIndex];
                       return (
-                        <tr key={rowIdx} className="h-[36px]">
-                          <td className="border border-black px-2 py-1.5 text-left text-[13px] break-words">
+                        <tr key={rowIdx} className="h-[36px] print:h-[30px]">
+                          <td className="border border-black px-2 py-1.5 print:py-1 text-left text-[13px] print:text-[12px] break-words">
                             {pax ? pax.name : ''}
                           </td>
-                          <td className="border border-black px-1.5 py-1.5 text-center text-[13px] font-semibold break-words">
+                          <td className="border border-black px-1.5 py-1.5 print:py-1 text-center text-[13px] print:text-[12px] font-semibold break-words">
                             {pax ? pax.seat : ''}
                           </td>
-                          <td className="border border-black px-1.5 py-1.5 text-center text-[13px] break-words">
+                          <td className="border border-black px-1.5 py-1.5 print:py-1 text-center text-[13px] print:text-[12px] break-words">
                             {pax ? activeMassReportPreview.destInput : ''}
                           </td>
-                          <td className="border border-black px-1.5 py-1.5 text-center text-[13px] break-words">
+                          <td className="border border-black px-1.5 py-1.5 print:py-1 text-center text-[13px] print:text-[12px] break-words">
                             {pax ? activeMassReportPreview.categoryInput : ''}
                           </td>
-                          <td className="border border-black px-2 py-1.5 text-left text-[13px] break-words">
+                          <td className="border border-black px-2 py-1.5 print:py-1 text-left text-[13px] print:text-[12px] break-words">
                             {pax ? pax.remarks : ''}
                           </td>
                         </tr>
@@ -1065,11 +1065,11 @@ export const AdminModule: React.FC<Props> = ({
                   </tbody>
                 </table>
 
-                <div className="text-center font-bold text-[15px] my-5 text-black">
+                <div className="text-center font-bold text-[15px] print:text-[13px] my-5 print:my-3 text-black">
                   *PLEASE INDICATE: WEHR-WHEEL CHAIR UPTO RAMP, MEDA, UM/YP, ETC.
                 </div>
 
-                <div className="text-center font-bold text-[19px] mb-3 text-black">
+                <div className="text-center font-bold text-[19px] print:text-[16px] mb-3 print:mb-2 text-black">
                   ACKNOWLEDGEMENT
                 </div>
 

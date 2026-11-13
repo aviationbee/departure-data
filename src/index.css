@@ -44,11 +44,13 @@
 /* Print styling - Perfect Single Page A4 Official Report */
 @page {
   size: A4 portrait;
-  margin: 10mm 12mm;
+  margin: 8mm 10mm;
 }
 
 @media print {
-  html, body, #root, #root div, .min-h-screen {
+  html,
+  body,
+  #root {
     background: #ffffff !important;
     background-color: #ffffff !important;
     background-image: none !important;
@@ -60,6 +62,7 @@
     min-height: 0 !important;
     box-shadow: none !important;
     overflow: visible !important;
+    display: block !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -75,14 +78,16 @@
     display: none !important;
   }
 
-  /* Reset all parent layout containers so they don't clip or add dark backgrounds */
+  /* Reset ONLY outer page layout wrappers (never target generic `#root div`!) */
   .aviation-modern-bg,
   .aviation-light-bg,
   .print-page-wrapper,
   .print-dual-container,
   #right-report-printable,
   #arrival-report-printable,
-  .print-table-scroll {
+  .print-table-scroll,
+  .mass-report-wrapper,
+  .mass-report-pages-container {
     background: #ffffff !important;
     background-color: #ffffff !important;
     background-image: none !important;
@@ -99,72 +104,41 @@
     min-height: 0 !important;
     overflow: visible !important;
     display: block !important;
+    gap: 0 !important;
   }
 
-  /* ISOLATE PRINTING: When user clicks PRINT on Departure Report */
-  body[data-print-target="departure"] * {
-    visibility: hidden !important;
-  }
-  body[data-print-target="departure"] #printable-right-table,
-  body[data-print-target="departure"] #printable-right-table * {
-    visibility: visible !important;
-  }
-  body[data-print-target="departure"] #printable-right-table {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    color: #000000 !important;
-    border: none !important;
-    box-shadow: none !important;
+  /* ISOLATE PRINTING cleanly using display:none so the target starts at top of Page 1 without blank space or fragmentation */
+  body[data-print-target="departure"] #arrival-report-printable {
+    display: none !important;
   }
 
-  /* ISOLATE PRINTING: When user clicks PRINT on Arrival Report */
-  body[data-print-target="arrival"] * {
-    visibility: hidden !important;
-  }
-  body[data-print-target="arrival"] #printable-arrival-table,
-  body[data-print-target="arrival"] #printable-arrival-table * {
-    visibility: visible !important;
-  }
-  body[data-print-target="arrival"] #printable-arrival-table {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    color: #000000 !important;
-    border: none !important;
-    box-shadow: none !important;
+  body[data-print-target="arrival"] #right-report-printable {
+    display: none !important;
   }
 
-  body:not([data-print-target="departure"]):not([data-print-target="arrival"]) #right-report-printable {
-    page-break-after: always !important;
-    break-after: page !important;
+  /* When printing ALL reports together: Departure = Page 1, Arrival (if rendered) = Page 2 */
+  body:not([data-print-target="departure"]):not([data-print-target="arrival"]) #arrival-report-printable {
+    page-break-before: always !important;
+    break-before: page !important;
   }
 
-  /* Official A4 Table container */
+  /* Official A4 Table containers (Single Page Guarantee) */
   #printable-right-table,
   #printable-arrival-table {
     width: 100% !important;
     max-width: 100% !important;
     min-height: 0 !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    display: block !important;
   }
 
   #printable-right-table table,
@@ -172,8 +146,6 @@
     width: 100% !important;
     border-collapse: collapse !important;
     border: 1.5pt solid #000000 !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
   }
 
   #printable-right-table tr,
@@ -185,34 +157,36 @@
 
   #printable-right-table td,
   #printable-arrival-table td {
-    padding: 4.5px 8px !important;
-    font-size: 9.5pt !important;
-    line-height: 1.25 !important;
+    padding: 3.5px 7px !important;
+    font-size: 9pt !important;
+    line-height: 1.2 !important;
     color: #000000 !important;
   }
 
-  /* MASS FORM Report Multi-Page Print Styling */
-  .mass-report-wrapper {
-    background: #ffffff !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    width: 100% !important;
-    display: block !important;
-  }
-
+  /* MASS FORM Report Print Styling (Matches On-Screen Report Exactly) */
   .mass-report-page {
     background: #ffffff !important;
     color: #000000 !important;
     border: none !important;
     box-shadow: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    border-radius: 0 !important;
+    margin: 0 auto !important;
+    padding: 2mm 2mm !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-height: 0 !important;
+    display: block !important;
     page-break-after: always !important;
     break-after: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .mass-report-page * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .mass-report-page:last-child {

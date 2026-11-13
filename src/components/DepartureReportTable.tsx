@@ -80,28 +80,28 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
   const paxHandlingValue = (data.paxHandling || 'N/A').toUpperCase();
 
   return (
-    <div className="w-full flex justify-center py-2 print:py-0 uppercase">
+    <div className="w-full flex justify-center py-2 print:block print:py-0 uppercase">
       {/* Actual A4 Sized Container Preview (210mm x 297mm proportions) */}
       <div
         id="printable-right-table"
-        className="w-full max-w-[210mm] min-h-[297mm] print:min-h-0 bg-white text-black p-8 md:p-10 print:p-0 font-serif border border-neutral-300 print:border-0 rounded shadow-2xl print:shadow-none relative uppercase"
+        className="w-full max-w-[210mm] min-h-[297mm] print:min-h-0 print:max-w-none bg-white text-black p-8 md:p-10 print:p-0 font-serif border border-neutral-300 print:border-0 rounded print:rounded-none shadow-2xl print:shadow-none relative uppercase"
         style={{
           fontFamily: "'Bookman Old Style', 'Times New Roman', serif",
           boxSizing: 'border-box',
         }}
       >
         {/* Header */}
-        <div className="text-center mb-5 print:mb-3.5">
+        <div className="text-center mb-5 print:mb-3">
           <h2 className="text-3xl print:text-2xl font-extrabold tracking-widest m-0 uppercase text-black">
             US-BANGLA AIRLINES
           </h2>
-          <h3 className="text-lg print:text-base font-bold border-b-2 border-black pb-1.5 mt-1 tracking-wider uppercase text-black">
+          <h3 className="text-lg print:text-base font-bold border-b-2 border-black pb-1.5 print:pb-1 mt-1 tracking-wider uppercase text-black">
             FLIGHT DEPARTURE REPORT
           </h3>
         </div>
 
         {/* Departure Table */}
-        <table className="w-full border-2 border-black border-collapse text-[10.5pt] print:text-[9.5pt] text-black">
+        <table className="w-full border-2 border-black border-collapse text-[10.5pt] print:text-[9pt] text-black">
           <tbody>
             <tr className="border border-black">
               <td className="font-bold p-2 w-[35%] align-top border-r border-black">1. FLIGHT NO</td>
@@ -200,7 +200,7 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
         </table>
 
         {/* Footer Signatures */}
-        <table className="w-full border-2 border-black border-collapse mt-6 print:mt-4 text-[10.5pt] print:text-[9.5pt] text-black">
+        <table className="w-full border-2 border-black border-collapse mt-6 print:mt-3 text-[10.5pt] print:text-[9pt] text-black">
           <tbody>
             <tr className="border border-black">
               <td className="font-bold p-2.5 w-[35%] border-r border-black">PREPARED BY</td>
@@ -211,7 +211,7 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
               <td className="p-2.5">: USBA-{user.usbaId.toUpperCase() || 'N/A'}</td>
             </tr>
             <tr className="border border-black">
-              <td className="font-bold p-2.5 h-14 print:h-11 align-middle border-r border-black">SIGNATURE</td>
+              <td className="font-bold p-2.5 h-14 print:h-10 align-middle border-r border-black">SIGNATURE</td>
               <td className="p-2.5 align-middle">:</td>
             </tr>
           </tbody>

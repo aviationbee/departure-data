@@ -1193,7 +1193,7 @@ export default function App() {
     <div className="aviation-modern-bg min-h-screen w-full flex flex-col font-serif select-text text-white relative">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-2xl text-xs md:text-sm font-sans flex items-center gap-2.5 animate-bounce border border-emerald-400">
+        <div className="no-print fixed top-5 right-5 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-2xl text-xs md:text-sm font-sans flex items-center gap-2.5 animate-bounce border border-emerald-400">
           <CheckCircle className="w-4 h-4 text-emerald-200" />
           <span>{toastMessage}</span>
         </div>
