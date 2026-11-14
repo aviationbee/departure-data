@@ -37,10 +37,12 @@ export const FLIGHT_LAST_SYNC_KEY = 'usba_flight_last_sync_iso';
 export const FLIGHT_FULL_SYNC_TS_KEY = 'usba_flight_full_sync_ts';
 export const MASS_LAST_SYNC_KEY = 'usba_mass_last_sync_iso';
 export const MASS_FULL_SYNC_TS_KEY = 'usba_mass_full_sync_ts';
+export const NOTICE_LAST_CHECK_TS_KEY = 'usba_notice_last_check_ts';
 
-const SMART_SYNC_COOLDOWN_MS = 90 * 1000;
-const FULL_15D_COOLDOWN_MS = 10 * 60 * 1000;
-const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+const SMART_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
+const FULL_15D_COOLDOWN_MS = 30 * 60 * 1000;
+const NOTICE_CHECK_COOLDOWN_MS = 15 * 60 * 1000;
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export function mergeFlightReports(
   existing: StoredFlightReport[],
@@ -646,13 +648,23 @@ export async function circulateAdminNotice(
 ): Promise<void> {
   const now = Date.now();
   const createdAt = new Date(now).toISOString();
+  const noticePayload: SystemNoticeDoc = {
+    id: 'current_notice',
+    message: message.trim().toUpperCase(),
+    active,
+    createdAt,
+    timestamp: now,
+    createdBy: createdBy.toUpperCase(),
+  };
+  setSafeStorageItem(CACHED_SYSTEM_NOTICE_KEY, JSON.stringify(noticePayload));
+  systemNoticeSubscribers.forEach((cb) => cb(noticePayload));
   try {
     await setDoc(doc(db, 'system_notices', 'current_notice'), {
-      message: message.trim().toUpperCase(),
-      active,
+      message: noticePayload.message,
+      active: noticePayload.active,
       createdAt,
       timestamp: now,
-      createdBy: createdBy.toUpperCase(),
+      createdBy: noticePayload.createdBy,
     });
   } catch (err) {
     console.warn('Firestore circulateAdminNotice warning:', err);
@@ -686,10 +698,22 @@ function setSafeStorageItem(key: string, val: string): void {
 let inFlightFlightSync: Promise<StoredFlightReport[]> | null = null;
 let inFlightMassSync: Promise<StoredMassReport[]> | null = null;
 
+function getTodayDateCandidates(): string[] {
+  const candidates = new Set<string>();
+  candidates.add(new Date().toISOString().split('T')[0]);
+  try {
+    candidates.add(new Date().toLocaleDateString('en-CA'));
+    candidates.add(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' }));
+  } catch {
+    // Fallback to UTC ISO date only
+  }
+  return Array.from(candidates).filter(Boolean).slice(0, 3);
+}
+
 // Smart Quota-Preserving Sync for Flight Reports:
-// - 'smart': 90s cooldown -> 48h initial load on fresh device -> updatedAt delta afterwards
-// - 'today': bypasses 90s cooldown, loads last 48h createdAt (used by SYNC / REFRESH button)
-// - 'full' : loads 15-day archive (limit 150) with 10-min cooldown (used only when clicking ALL DATES / ALL 15 DAYS)
+// - 'smart': 10-min cooldown -> Today-only initial load on fresh device -> updatedAt delta afterwards
+// - 'today': bypasses 10-min cooldown, loads last 24h createdAt (used by SYNC / REFRESH button)
+// - 'full' : loads 15-day archive (limit 120) with 30-min cooldown (used only when clicking ALL DATES / ALL 15 DAYS)
 export async function syncFlightReportsFromCloud(
   modeOrForce: CloudSyncMode | boolean = 'smart'
 ): Promise<StoredFlightReport[]> {
@@ -727,22 +751,28 @@ export async function syncFlightReportsFromCloud(
 
       let q;
       if (mode === 'full') {
-        q = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(150));
+        q = query(collection(db, 'flight_reports'), orderBy('createdAt', 'desc'), limit(120));
       } else if (hasValidDeltaCursor) {
         const deltaCursorIso = new Date(Math.max(now - FIFTEEN_DAYS_MS, lastSyncMs - 2 * 60 * 1000)).toISOString();
         q = query(
           collection(db, 'flight_reports'),
           where('updatedAt', '>=', deltaCursorIso),
           orderBy('updatedAt', 'desc'),
-          limit(80)
+          limit(60)
         );
-      } else {
-        const recent48hIso = new Date(now - FORTY_EIGHT_HOURS_MS).toISOString();
+      } else if (mode === 'today') {
+        const recent24hIso = new Date(now - TWENTY_FOUR_HOURS_MS).toISOString();
         q = query(
           collection(db, 'flight_reports'),
-          where('createdAt', '>=', recent48hIso),
+          where('createdAt', '>=', recent24hIso),
           orderBy('createdAt', 'desc'),
-          limit(80)
+          limit(60)
+        );
+      } else {
+        q = query(
+          collection(db, 'flight_reports'),
+          where('date', 'in', getTodayDateCandidates()),
+          limit(60)
         );
       }
 
@@ -821,22 +851,28 @@ export async function syncMassReportsFromCloud(
 
       let q;
       if (mode === 'full') {
-        q = query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(150));
+        q = query(collection(db, 'mass_reports'), orderBy('createdAt', 'desc'), limit(120));
       } else if (hasValidDeltaCursor) {
         const deltaCursorIso = new Date(Math.max(now - FIFTEEN_DAYS_MS, lastSyncMs - 2 * 60 * 1000)).toISOString();
         q = query(
           collection(db, 'mass_reports'),
           where('updatedAt', '>=', deltaCursorIso),
           orderBy('updatedAt', 'desc'),
-          limit(60)
+          limit(40)
         );
-      } else {
-        const recent48hIso = new Date(now - FORTY_EIGHT_HOURS_MS).toISOString();
+      } else if (mode === 'today') {
+        const recent24hIso = new Date(now - TWENTY_FOUR_HOURS_MS).toISOString();
         q = query(
           collection(db, 'mass_reports'),
-          where('createdAt', '>=', recent48hIso),
+          where('createdAt', '>=', recent24hIso),
           orderBy('createdAt', 'desc'),
-          limit(60)
+          limit(50)
+        );
+      } else {
+        q = query(
+          collection(db, 'mass_reports'),
+          where('dateInput', 'in', getTodayDateCandidates()),
+          limit(40)
         );
       }
 
@@ -1141,9 +1177,6 @@ export function subscribeToActivityLogs(
   };
 }
 
-let systemNoticeSnapshotUnsub: (() => void) | null = null;
-let systemNoticeRefCount = 0;
-
 function getCachedSystemNotice(): SystemNoticeDoc | null {
   try {
     const raw = localStorage.getItem(CACHED_SYSTEM_NOTICE_KEY);
@@ -1153,7 +1186,12 @@ function getCachedSystemNotice(): SystemNoticeDoc | null {
   }
 }
 
-export async function refreshSystemNoticeFromCloud(): Promise<SystemNoticeDoc | null> {
+export async function refreshSystemNoticeFromCloud(force = true): Promise<SystemNoticeDoc | null> {
+  const now = Date.now();
+  const lastCheckTs = Number(getSafeStorageItem(NOTICE_LAST_CHECK_TS_KEY) || '0');
+  if (!force && lastCheckTs > 0 && now - lastCheckTs < NOTICE_CHECK_COOLDOWN_MS) {
+    return getCachedSystemNotice();
+  }
   try {
     const docSnap = await getDoc(doc(db, 'system_notices', 'current_notice'));
     clearQuotaExceeded();
@@ -1161,6 +1199,7 @@ export async function refreshSystemNoticeFromCloud(): Promise<SystemNoticeDoc | 
       ? ({ id: docSnap.id, ...(docSnap.data() as Omit<SystemNoticeDoc, 'id'>) } as SystemNoticeDoc)
       : null;
     setSafeStorageItem(CACHED_SYSTEM_NOTICE_KEY, JSON.stringify(notice));
+    setSafeStorageItem(NOTICE_LAST_CHECK_TS_KEY, String(Date.now()));
     systemNoticeSubscribers.forEach((cb) => cb(notice));
     return notice;
   } catch (err: any) {
@@ -1172,41 +1211,15 @@ export async function refreshSystemNoticeFromCloud(): Promise<SystemNoticeDoc | 
   }
 }
 
-// Singleton ref-counted subscription to Active System Notice (1 single document)
+// Zero-background-connection System Notice check (15-min cooldown + SYNC/REFRESH; 0 idle listeners)
 export function subscribeToSystemNotice(
   callback: (notice: SystemNoticeDoc | null) => void
 ) {
   systemNoticeSubscribers.add(callback);
-  systemNoticeRefCount += 1;
   callback(getCachedSystemNotice());
-
-  if (!systemNoticeSnapshotUnsub) {
-    systemNoticeSnapshotUnsub = onSnapshot(
-      doc(db, 'system_notices', 'current_notice'),
-      (docSnap) => {
-        clearQuotaExceeded();
-        const notice = docSnap.exists()
-          ? ({ id: docSnap.id, ...(docSnap.data() as Omit<SystemNoticeDoc, 'id'>) } as SystemNoticeDoc)
-          : null;
-        setSafeStorageItem(CACHED_SYSTEM_NOTICE_KEY, JSON.stringify(notice));
-        systemNoticeSubscribers.forEach((cb) => cb(notice));
-      },
-      (err: any) => {
-        console.warn('Warning subscribing to system_notices:', err);
-        systemNoticeSnapshotUnsub = null;
-        if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
-          notifyQuotaExceeded();
-        }
-      }
-    );
-  }
+  refreshSystemNoticeFromCloud(false).catch(() => {});
 
   return () => {
     systemNoticeSubscribers.delete(callback);
-    systemNoticeRefCount = Math.max(0, systemNoticeRefCount - 1);
-    if (systemNoticeRefCount === 0 && systemNoticeSnapshotUnsub) {
-      systemNoticeSnapshotUnsub();
-      systemNoticeSnapshotUnsub = null;
-    }
   };
 }

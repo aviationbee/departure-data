@@ -113,7 +113,7 @@ export const AdminModule: React.FC<Props> = ({
   const [logStationFilter, setLogStationFilter] = useState<string>('ALL');
   const [savedFlightStationFilter, setSavedFlightStationFilter] = useState<string>('ALL');
   const [savedFlightSearch, setSavedFlightSearch] = useState<string>('');
-  const [savedFlightTodayOnly, setSavedFlightTodayOnly] = useState<boolean>(false);
+  const [savedFlightTodayOnly, setSavedFlightTodayOnly] = useState<boolean>(true);
   const [savedMassStationFilter, setSavedMassStationFilter] = useState<string>('ALL');
   const [savedMassSearch, setSavedMassSearch] = useState<string>('');
   const [activeMassReportPreview, setActiveMassReportPreview] = useState<StoredMassReport | null>(null);
@@ -146,16 +146,22 @@ export const AdminModule: React.FC<Props> = ({
       },
       { realtime: true }
     );
-    const yesterdayIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const needsFullArchive =
-      currentPage === 'admin-saved-flight' ||
-      showAllDates ||
-      (selectedDate && selectedDate < yesterdayIso);
-    syncFlightReportsFromCloud(needsFullArchive ? 'full' : 'smart').catch(() => {});
     return () => {
       unsubReports();
     };
-  }, [isAdminFlightPage, currentPage, showAllDates, selectedDate]);
+  }, [isAdminFlightPage]);
+
+  useEffect(() => {
+    if (!isAdminFlightPage) return;
+    const currentUtcToday = new Date().toISOString().split('T')[0];
+    const currentBdToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+    const earliestToday = currentUtcToday < currentBdToday ? currentUtcToday : currentBdToday;
+    const needsFullArchive =
+      (currentPage === 'admin-saved-flight' && !savedFlightTodayOnly) ||
+      showAllDates ||
+      (Boolean(selectedDate) && selectedDate < earliestToday);
+    syncFlightReportsFromCloud(needsFullArchive ? 'full' : 'smart').catch(() => {});
+  }, [isAdminFlightPage, currentPage, showAllDates, selectedDate, savedFlightTodayOnly]);
 
   // MASS Reports: attach delta-only live listener ONLY when Super Admin opens SAVED MAAS FORM
   const isAdminMassPage = adminRole === 'super' && currentPage === 'admin-saved-maas';
@@ -168,11 +174,15 @@ export const AdminModule: React.FC<Props> = ({
       },
       { realtime: true }
     );
-    syncMassReportsFromCloud('full').catch(() => {});
     return () => {
       unsubMass();
     };
   }, [isAdminMassPage]);
+
+  useEffect(() => {
+    if (!isAdminMassPage) return;
+    syncMassReportsFromCloud(savedMassSearch.trim() ? 'full' : 'smart').catch(() => {});
+  }, [isAdminMassPage, savedMassSearch]);
 
   // One-shot Activity Logs fetch (no permanent listener) ONLY when Super Admin opens LOG CHECK
   useEffect(() => {

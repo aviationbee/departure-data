@@ -429,6 +429,12 @@ export default function App() {
     };
   }, [currentPage === 'identification']);
 
+  useEffect(() => {
+    if (currentPage === 'welcome') {
+      refreshSystemNoticeFromCloud(false).catch(() => {});
+    }
+  }, [currentPage]);
+
   // Local-first subscription to Flight Reports (0 background reads while sitting on input/dashboard pages)
   useEffect(() => {
     if (currentPage === 'identification') return;
