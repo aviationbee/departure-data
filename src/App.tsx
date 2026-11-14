@@ -42,9 +42,6 @@ import {
   reconstructFormDataFromStoredReport,
   deleteFlightReportFromCloud,
   isLoadControlReport,
-  exportStationBackupJson,
-  restoreStationBackupJson,
-  getCachedFlightReports,
   syncFlightReportsFromCloud,
   syncMassReportsFromCloud,
   refreshSystemNoticeFromCloud,
@@ -76,8 +73,6 @@ import {
   FolderOpen,
   Eye,
   Download,
-  Upload,
-  HardDrive,
   Calendar,
   Edit3,
   Sliders,
@@ -109,6 +104,8 @@ const INITIAL_FORM_DATA: FlightFormData = {
   arrivalStatus: 'FLIGHT ON TIME ARRIVED',
   arrPaxAdult: '',
   arrPaxInfant: '',
+  arrOnboardPax: '',
+  arrJoiningPax: '',
   arrBaggageWeight: '',
   arrBaggagePcs: '',
   arrCargoWeight: '',
@@ -134,6 +131,8 @@ const INITIAL_FORM_DATA: FlightFormData = {
   paxChild: '',
   paxInfant: '',
   paxTotal: '',
+  depOnboardPax: '',
+  depJoiningPax: '',
   baggageWeight: '',
   baggagePcs: '',
   baggageComNo: '',
@@ -278,7 +277,6 @@ export default function App() {
   const [loadControlViewMode, setLoadControlViewMode] = useState<'input' | 'dual-report'>('input');
   const [flightToRemove, setFlightToRemove] = useState<StoredFlightReport | null>(null);
   const [showAllDatesInSavedFlights, setShowAllDatesInSavedFlights] = useState(false);
-  const backupFileInputRef = React.useRef<HTMLInputElement>(null);
   const [dismissedNoticeTs, setDismissedNoticeTs] = useState<number>(() => {
     return Number(localStorage.getItem('usba_dismissed_notice_ts') || '0');
   });
@@ -540,17 +538,29 @@ export default function App() {
     return true;
   };
 
-  // Auto calculate Passenger Total
+  // Auto calculate Passenger Total & auto-sync Departure Joining Pax when Onboard Pax is filled
   useEffect(() => {
     const male = parseInt(formData.paxMale, 10) || 0;
     const female = parseInt(formData.paxFemale, 10) || 0;
     const child = parseInt(formData.paxChild, 10) || 0;
+    const infant = parseInt(formData.paxInfant, 10) || 0;
     const total = male + female + child;
-    setFormData((prev) => ({
-      ...prev,
-      paxTotal: total > 0 ? String(total) : '',
-    }));
-  }, [formData.paxMale, formData.paxFemale, formData.paxChild]);
+    const totalWithInfant = total + infant;
+    setFormData((prev) => {
+      const nextPaxTotal = total > 0 ? String(total) : '';
+      const hasOnboard = Boolean(prev.depOnboardPax && prev.depOnboardPax.trim() !== '');
+      const onboardNum = parseInt(prev.depOnboardPax || '', 10);
+      const nextJoining =
+        hasOnboard && !isNaN(onboardNum) && totalWithInfant > 0
+          ? String(Math.max(0, totalWithInfant - onboardNum))
+          : prev.depJoiningPax;
+      return {
+        ...prev,
+        paxTotal: nextPaxTotal,
+        depJoiningPax: nextJoining,
+      };
+    });
+  }, [formData.paxMale, formData.paxFemale, formData.paxChild, formData.paxInfant]);
 
   // Auto calculate Arrival Status (for Outstation)
   useEffect(() => {
@@ -1144,36 +1154,6 @@ export default function App() {
     ? sourceEverSavedFlights
     : sourceTodaySavedFlights;
 
-  // Backup & Restore utilities for guaranteed data safety
-  const handleExportStationBackup = () => {
-    const json = exportStationBackupJson(currentStationCode);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `USBA_BACKUP_${currentStationCode}_${todayIsoDate}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast(`BACKUP FILE DOWNLOADED FOR STATION ${currentStationCode}!`);
-  };
-
-  const handleRestoreBackupFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        const res = restoreStationBackupJson(content);
-        showToast(`RESTORED ${res.restoredFlights} FLIGHTS AND ${res.restoredMass} MASS REPORTS!`);
-        // Immediately reload in component state
-        setCloudFlightReports(getCachedFlightReports());
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   // Station Today's Saved Flights KPI Totals (reflects active page's flight list)
   const savedTotalFlights = todayStationSavedFlights.length;
   const savedTotalPax = todayStationSavedFlights.reduce(
@@ -1486,33 +1466,6 @@ export default function App() {
                 >
                   <Calendar className="w-3.5 h-3.5" />
                   <span>{showAllDatesInSavedFlights ? 'SHOW TODAY ONLY' : `ALL DATES (${sourceEverSavedFlights.length})`}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleExportStationBackup}
-                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
-                  title="Exports complete station flight database as a local JSON backup file"
-                >
-                  <HardDrive className="w-3.5 h-3.5" />
-                  <span>BACKUP (.JSON)</span>
-                </button>
-
-                <input
-                  type="file"
-                  ref={backupFileInputRef}
-                  onChange={handleRestoreBackupFile}
-                  accept=".json"
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => backupFileInputRef.current?.click()}
-                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-slate-700 uppercase"
-                  title="Restores flights from a downloaded JSON backup file into the station database"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>RESTORE</span>
                 </button>
 
                 <button
@@ -2149,9 +2102,25 @@ export default function App() {
                           type="number"
                           placeholder="70"
                           value={formData.arrPaxAdult || ''}
-                          onChange={(e) =>
-                            setFormData({ ...formData, arrPaxAdult: e.target.value })
-                          }
+                          onChange={(e) => {
+                            const nextAdult = e.target.value;
+                            const nextTotal =
+                              (parseInt(nextAdult || '0', 10) || 0) +
+                              (parseInt(formData.arrPaxInfant || '0', 10) || 0);
+                            const hasOnboard = Boolean(
+                              formData.arrOnboardPax && formData.arrOnboardPax.trim() !== ''
+                            );
+                            const onboardNum = parseInt(formData.arrOnboardPax || '', 10);
+                            const nextJoining =
+                              hasOnboard && !isNaN(onboardNum) && nextTotal > 0
+                                ? String(Math.max(0, nextTotal - onboardNum))
+                                : formData.arrJoiningPax || '';
+                            setFormData({
+                              ...formData,
+                              arrPaxAdult: nextAdult,
+                              arrJoiningPax: nextJoining,
+                            });
+                          }}
                           className="w-full min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
                         />
                         <span className="font-black text-sky-200 text-base px-0.5">+</span>
@@ -2159,10 +2128,76 @@ export default function App() {
                           type="text"
                           placeholder="02"
                           value={formData.arrPaxInfant || ''}
-                          onChange={(e) =>
-                            setFormData({ ...formData, arrPaxInfant: e.target.value.replace(/\D/g, '') })
-                          }
+                          onChange={(e) => {
+                            const nextInfant = e.target.value.replace(/\D/g, '');
+                            const nextTotal =
+                              (parseInt(formData.arrPaxAdult || '0', 10) || 0) +
+                              (parseInt(nextInfant || '0', 10) || 0);
+                            const hasOnboard = Boolean(
+                              formData.arrOnboardPax && formData.arrOnboardPax.trim() !== ''
+                            );
+                            const onboardNum = parseInt(formData.arrOnboardPax || '', 10);
+                            const nextJoining =
+                              hasOnboard && !isNaN(onboardNum) && nextTotal > 0
+                                ? String(Math.max(0, nextTotal - onboardNum))
+                                : formData.arrJoiningPax || '';
+                            setFormData({
+                              ...formData,
+                              arrPaxInfant: nextInfant,
+                              arrJoiningPax: nextJoining,
+                            });
+                          }}
                           className="w-20 min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* ONBOARD PAX & JOINING PAX (Joint Box Divided into 2 Boxes) */}
+                    <div className="flex flex-col">
+                      <label className="font-bold text-sky-100 mb-1 tracking-wider uppercase flex items-center justify-between gap-2 text-xs">
+                        <span>ONBOARD PAX</span>
+                        <span>JOINING PAX</span>
+                      </label>
+                      <div className="flex items-center gap-1.5 bg-slate-900/90 p-1.5 border border-sky-300/70 rounded-xl">
+                        <input
+                          type="number"
+                          placeholder="ONBOARD"
+                          value={formData.arrOnboardPax || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const totalArrPax =
+                              (parseInt(formData.arrPaxAdult || '0', 10) || 0) +
+                              (parseInt(formData.arrPaxInfant || '0', 10) || 0);
+                            if (val.trim() === '') {
+                              setFormData({
+                                ...formData,
+                                arrOnboardPax: '',
+                                arrJoiningPax: '',
+                              });
+                            } else {
+                              const onboardNum = parseInt(val, 10);
+                              const nextJoining =
+                                !isNaN(onboardNum) && totalArrPax > 0
+                                  ? String(Math.max(0, totalArrPax - onboardNum))
+                                  : formData.arrJoiningPax || '';
+                              setFormData({
+                                ...formData,
+                                arrOnboardPax: val,
+                                arrJoiningPax: nextJoining,
+                              });
+                            }
+                          }}
+                          className="w-full min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
+                        />
+                        <span className="font-black text-sky-200 text-base px-0.5">+</span>
+                        <input
+                          type="number"
+                          placeholder="JOINING"
+                          value={formData.arrJoiningPax || ''}
+                          onChange={(e) =>
+                            setFormData({ ...formData, arrJoiningPax: e.target.value })
+                          }
+                          className="w-full min-w-0 p-1.5 border border-sky-400/50 rounded-lg text-center text-sm font-bold bg-slate-950 text-white focus:border-white focus:outline-none"
                         />
                       </div>
                     </div>
@@ -2537,6 +2572,58 @@ export default function App() {
                   />
                 </div>
               </div>
+
+              {/* ONBOARD PAX & JOINING PAX (Outstation Only Joint Box after PASSENGERS) */}
+              {isOutstation && (
+                <div className="flex flex-col">
+                  <label className="font-bold text-slate-300 mb-1 tracking-wider uppercase flex items-center justify-between gap-2 text-xs">
+                    <span>ONBOARD PAX</span>
+                    <span>JOINING PAX</span>
+                  </label>
+                  <div className="flex items-center gap-1.5 bg-slate-800/90 p-1.5 border border-slate-700 rounded-xl">
+                    <input
+                      type="number"
+                      placeholder="ONBOARD"
+                      value={formData.depOnboardPax || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const totalDepPax =
+                          (parseInt(formData.paxTotal || '0', 10) || 0) +
+                          (parseInt(formData.paxInfant || '0', 10) || 0);
+                        if (val.trim() === '') {
+                          setFormData({
+                            ...formData,
+                            depOnboardPax: '',
+                            depJoiningPax: '',
+                          });
+                        } else {
+                          const onboardNum = parseInt(val, 10);
+                          const nextJoining =
+                            !isNaN(onboardNum) && totalDepPax > 0
+                              ? String(Math.max(0, totalDepPax - onboardNum))
+                              : formData.depJoiningPax || '';
+                          setFormData({
+                            ...formData,
+                            depOnboardPax: val,
+                            depJoiningPax: nextJoining,
+                          });
+                        }
+                      }}
+                      className="w-full min-w-0 p-2 border border-slate-600 rounded-lg text-center text-sm font-bold bg-slate-900 text-white focus:border-amber-400 focus:outline-none"
+                    />
+                    <span className="font-bold text-slate-400">+</span>
+                    <input
+                      type="number"
+                      placeholder="JOINING"
+                      value={formData.depJoiningPax || ''}
+                      onChange={(e) =>
+                        setFormData({ ...formData, depJoiningPax: e.target.value })
+                      }
+                      className="w-full min-w-0 p-2 border border-slate-600 rounded-lg text-center text-sm font-bold bg-slate-900 text-white focus:border-amber-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* FUEL UPLIFT */}
               <div className="flex flex-col">

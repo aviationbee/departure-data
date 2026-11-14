@@ -16,7 +16,14 @@ export const DepartureReportTable: React.FC<Props> = ({ data, user, mode }) => {
   const origin = (routeParts[0] || user.stationName || 'DAC').toUpperCase();
   const destination = (routeParts[1] || 'N/A').toUpperCase();
 
-  const passengerString = `LOAD-${data.flightLoad || '0'}   ACTUAL-${data.paxMale || '0'}+${data.paxFemale || '0'}+${data.paxChild || '0'}+${data.paxInfant || '0'} =${data.paxTotal || '0'}+${data.paxInfant || '0'}`;
+  const basePassengerString = `LOAD-${data.flightLoad || '0'}   ACTUAL-${data.paxMale || '0'}+${data.paxFemale || '0'}+${data.paxChild || '0'}+${data.paxInfant || '0'} =${data.paxTotal || '0'}+${data.paxInfant || '0'}`;
+  const hasDepPaxSplit = Boolean(
+    (data.depOnboardPax && data.depOnboardPax.trim() !== '') ||
+    (data.depJoiningPax && data.depJoiningPax.trim() !== '')
+  );
+  const passengerString = hasDepPaxSplit
+    ? `${basePassengerString}\u00A0 // ONBOARD=${data.depOnboardPax?.trim() || '0'}+JOIN=${data.depJoiningPax?.trim() || '0'}`
+    : basePassengerString;
   const bagMailCgoString = `BAG: ${data.baggagePcs || '0'} PCS/${data.baggageWeight || '0'} KGS   MAIL: ${(data.mail || '0').toUpperCase()}   CGO: ${data.cargoPcs || '0'} PCS/${data.cargoWeight || '0'} KGS`;
 
   // Helper: treat empty, '0', '00', 'NIL', 'N/A' as empty

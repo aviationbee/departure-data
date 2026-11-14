@@ -234,6 +234,8 @@ export interface StoredFlightReport {
   arrFlightNo?: string;
   arrRoute?: string;
   arrPaxReceiving?: string;
+  arrOnboardPax?: string;
+  arrJoiningPax?: string;
   std: string;
   doorClosed: string;
   chocksOff: string;
@@ -247,6 +249,8 @@ export interface StoredFlightReport {
   paxChild: string;
   paxInfant: string;
   paxTotal: string;
+  depOnboardPax?: string;
+  depJoiningPax?: string;
   baggageWeight: string;
   baggagePcs: string;
   cargoWeight: string;
@@ -363,6 +367,8 @@ export function reconstructFormDataFromStoredReport(r: StoredFlightReport): Flig
     arrFlightNo: r.arrFlightNo || '',
     arrRoute: r.arrRoute || '',
     arrPaxReceiving: r.arrPaxReceiving || '',
+    arrOnboardPax: r.arrOnboardPax || '',
+    arrJoiningPax: r.arrJoiningPax || '',
     std: r.std || '',
     doorClosed: r.doorClosed || '',
     chocksOff: r.chocksOff || '',
@@ -376,6 +382,8 @@ export function reconstructFormDataFromStoredReport(r: StoredFlightReport): Flig
     paxChild: r.paxChild || '',
     paxInfant: r.paxInfant || '',
     paxTotal: r.paxTotal || '',
+    depOnboardPax: r.depOnboardPax || '',
+    depJoiningPax: r.depJoiningPax || '',
     baggageWeight: r.baggageWeight || '',
     baggagePcs: r.baggagePcs || '',
     cargoWeight: r.cargoWeight || '',
@@ -454,6 +462,8 @@ export async function saveFlightReportToCloud(
     arrFlightNo: formData.arrFlightNo || '',
     arrRoute: formData.arrRoute || '',
     arrPaxReceiving: formData.arrPaxReceiving || '',
+    arrOnboardPax: formData.arrOnboardPax || '',
+    arrJoiningPax: formData.arrJoiningPax || '',
     std: formData.std || '',
     doorClosed: formData.doorClosed || '',
     chocksOff: formData.chocksOff || '',
@@ -467,6 +477,8 @@ export async function saveFlightReportToCloud(
     paxChild: formData.paxChild || '0',
     paxInfant: formData.paxInfant || '0',
     paxTotal: formData.paxTotal || '0',
+    depOnboardPax: formData.depOnboardPax || '',
+    depJoiningPax: formData.depJoiningPax || '',
     baggageWeight: formData.baggageWeight || '0',
     baggagePcs: formData.baggagePcs || '0',
     cargoWeight: formData.cargoWeight || '0',

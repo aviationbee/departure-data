@@ -54,7 +54,7 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
   };
 
   // 7. TOTAL PAX (e.g. 149+02 or 70+02 = 72)
-  const arrivalPaxString = (() => {
+  const baseArrivalPaxString = (() => {
     if (data.arrTotalPax && data.arrTotalPax.trim()) {
       return data.arrTotalPax.trim();
     }
@@ -67,6 +67,13 @@ export const ArrivalReportTable: React.FC<Props> = ({ data, user }) => {
     }
     return '0+00';
   })();
+  const hasArrPaxSplit = Boolean(
+    (data.arrOnboardPax && data.arrOnboardPax.trim() !== '') ||
+    (data.arrJoiningPax && data.arrJoiningPax.trim() !== '')
+  );
+  const arrivalPaxString = hasArrPaxSplit
+    ? `${baseArrivalPaxString}\u00A0 // ONBOARD=${data.arrOnboardPax?.trim() || '0'}+JOIN=${data.arrJoiningPax?.trim() || '0'}`
+    : baseArrivalPaxString;
 
   // 8. TOTAL BAGGAGE/PCS (Weight & PCS)
   const arrBagW = data.arrBagWeight || data.arrBaggageWeight || '0';

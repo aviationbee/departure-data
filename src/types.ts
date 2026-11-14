@@ -19,6 +19,8 @@ export interface FlightFormData {
   arrPaxAdult?: string;
   arrPaxInfant?: string;
   arrTotalPax?: string;
+  arrOnboardPax?: string;
+  arrJoiningPax?: string;
   arrBaggageWeight?: string;
   arrBaggagePcs?: string;
   arrBagWeight?: string;
@@ -49,6 +51,8 @@ export interface FlightFormData {
   paxChild: string;
   paxInfant: string;
   paxTotal: string;
+  depOnboardPax?: string;
+  depJoiningPax?: string;
   baggageWeight: string;
   baggagePcs: string;
   baggageComNo?: string;

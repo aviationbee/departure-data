@@ -146,7 +146,8 @@ export const exportOutstationFlightStatusXlsx = (
   };
 
   // Fill in empty merged cells for Row 1 & 2 so borders/styles look clean
-  for (let c = 1; c < 14; c++) {
+  const totalCols = 18;
+  for (let c = 1; c < totalCols; c++) {
     const cellA1 = XLSX.utils.encode_cell({ r: 0, c });
     ws[cellA1] = {
       v: '',
@@ -172,6 +173,8 @@ export const exportOutstationFlightStatusXlsx = (
     'Minutes',
     'Status',
     'PAX',
+    'ONBOARD PAX',
+    'JOINING PAX',
     'Flight No',
     'STD',
     'ATD',
@@ -179,6 +182,8 @@ export const exportOutstationFlightStatusXlsx = (
     'GT',
     'Status',
     'PAX',
+    'ONBOARD PAX',
+    'JOINING PAX',
     'REMARKS',
   ];
 
@@ -278,6 +283,11 @@ export const exportOutstationFlightStatusXlsx = (
       depRemarks = `${depRemarks} - ${customRemark}`;
     }
 
+    const arrOnboardPax = String((r as any).arrOnboardPax || raw?.arrOnboardPax || '').trim();
+    const arrJoiningPax = String((r as any).arrJoiningPax || raw?.arrJoiningPax || '').trim();
+    const depOnboardPax = String((r as any).depOnboardPax || raw?.depOnboardPax || '').trim();
+    const depJoiningPax = String((r as any).depJoiningPax || raw?.depJoiningPax || '').trim();
+
     const rowData = [
       arvFlt,
       staFormatted,
@@ -285,6 +295,8 @@ export const exportOutstationFlightStatusXlsx = (
       arrCalc.minsStr,
       arrCalc.status,
       arvPax,
+      arrOnboardPax,
+      arrJoiningPax,
       depFlt,
       stdFormatted,
       atdFormatted,
@@ -292,6 +304,8 @@ export const exportOutstationFlightStatusXlsx = (
       gtFormatted,
       depCalc.status,
       depPax,
+      depOnboardPax,
+      depJoiningPax,
       depRemarks,
     ];
 
@@ -300,7 +314,7 @@ export const exportOutstationFlightStatusXlsx = (
       let fgColor: { rgb: string } | undefined = undefined;
       let fontColor = { rgb: '000000' };
 
-      // Status column highlights (Col 4: Arrival Status, Col 11: Departure Status)
+      // Status column highlights (Col 4: Arrival Status, Col 13: Departure Status)
       if (colIdx === 4) {
         if (arrCalc.status === 'DELAY') {
           fgColor = { rgb: 'FFD7D7' };
@@ -312,7 +326,7 @@ export const exportOutstationFlightStatusXlsx = (
           fgColor = { rgb: 'FFF5CC' };
           fontColor = { rgb: 'B45309' };
         }
-      } else if (colIdx === 11) {
+      } else if (colIdx === 13) {
         if (depCalc.status === 'DELAY') {
           fgColor = { rgb: 'FFD7D7' };
           fontColor = { rgb: 'DC2626' };
@@ -323,7 +337,7 @@ export const exportOutstationFlightStatusXlsx = (
           fgColor = { rgb: 'FFF5CC' };
           fontColor = { rgb: 'B45309' };
         }
-      } else if (colIdx === 13) {
+      } else if (colIdx === 17) {
         // Remarks color matching status
         if (depCalc.status === 'DELAY') fontColor = { rgb: 'DC2626' };
         else if (depCalc.status === 'EARLY') fontColor = { rgb: '16A34A' };
@@ -337,12 +351,12 @@ export const exportOutstationFlightStatusXlsx = (
           font: {
             name: 'Calibri',
             sz: 11,
-            bold: colIdx === 0 || colIdx === 6 || colIdx === 4 || colIdx === 11 || colIdx === 13,
+            bold: colIdx === 0 || colIdx === 8 || colIdx === 4 || colIdx === 13 || colIdx === 17,
             color: fontColor,
           },
           fill: fgColor ? { fgColor } : undefined,
           alignment: {
-            horizontal: colIdx === 13 ? 'left' : 'center',
+            horizontal: colIdx === 17 ? 'left' : 'center',
             vertical: 'center',
           },
           border: thinBorder,
@@ -352,10 +366,10 @@ export const exportOutstationFlightStatusXlsx = (
   });
 
   const totalRowCount = 3 + reports.length;
-  ws['!ref'] = `A1:N${totalRowCount}`;
+  ws['!ref'] = `A1:${XLSX.utils.encode_cell({ r: totalRowCount - 1, c: headers.length - 1 })}`;
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },
+    { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
   ];
   ws['!cols'] = [
     { wch: 14 }, // Arr Flt
@@ -364,6 +378,8 @@ export const exportOutstationFlightStatusXlsx = (
     { wch: 10 }, // Minutes
     { wch: 12 }, // Status
     { wch: 12 }, // Arr Pax
+    { wch: 14 }, // Arr Onboard Pax
+    { wch: 14 }, // Arr Joining Pax
     { wch: 14 }, // Dep Flt
     { wch: 10 }, // STD
     { wch: 10 }, // ATD
@@ -371,6 +387,8 @@ export const exportOutstationFlightStatusXlsx = (
     { wch: 10 }, // GT
     { wch: 12 }, // Status
     { wch: 12 }, // Dep Pax
+    { wch: 14 }, // Dep Onboard Pax
+    { wch: 14 }, // Dep Joining Pax
     { wch: 55 }, // Remarks
   ];
   ws['!rows'] = [
@@ -410,6 +428,8 @@ export const STANDARD_FLIGHT_HEADERS = [
   'ARR PAX RECEIVING',
   'ARR PAX ADULT',
   'ARR PAX INFANT',
+  'ARR ONBOARD PAX',
+  'ARR JOINING PAX',
   'ARR BAG WEIGHT (KG)',
   'ARR BAG PCS',
   'ARR CARGO WEIGHT (KG)',
@@ -432,6 +452,8 @@ export const STANDARD_FLIGHT_HEADERS = [
   'PAX CHILD',
   'PAX INFANT',
   'TOTAL PAX',
+  'ONBOARD PAX',
+  'JOINING PAX',
   'BAG WEIGHT (KG)',
   'BAG PCS',
   'BAG COM NO',
@@ -508,6 +530,8 @@ export const exportStandardFlightReportsXlsx = (
       raw?.arrPaxReceiving || '',
       raw?.arrPaxAdult || '',
       raw?.arrPaxInfant || '',
+      r.arrOnboardPax || raw?.arrOnboardPax || '',
+      r.arrJoiningPax || raw?.arrJoiningPax || '',
       raw?.arrBaggageWeight || '',
       raw?.arrBaggagePcs || '',
       raw?.arrCargoWeight || '',
@@ -530,6 +554,8 @@ export const exportStandardFlightReportsXlsx = (
       r.paxChild || raw?.paxChild || '',
       r.paxInfant || raw?.paxInfant || '',
       r.paxTotal || raw?.paxTotal || '',
+      r.depOnboardPax || raw?.depOnboardPax || '',
+      r.depJoiningPax || raw?.depJoiningPax || '',
       r.baggageWeight || raw?.baggageWeight || '',
       r.baggagePcs || raw?.baggagePcs || '',
       raw?.baggageComNo || '',

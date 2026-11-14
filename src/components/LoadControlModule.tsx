@@ -745,8 +745,10 @@ export const LoadControlModule: React.FC<Props> = ({
     id: string;
     createdAt: string;
   } | null>(null);
+  const [reportOfficerUser, setReportOfficerUser] = useState<UserInfo | null>(null);
 
-  const activeStation = extractStationCode(userInfo.stationName);
+  const activeOfficerUser = reportOfficerUser || userInfo;
+  const activeStation = extractStationCode(activeOfficerUser.stationName || userInfo.stationName);
   const isOutstation = activeStation !== 'DAC';
 
   // Load saved flight data for editing or viewing when editReport prop is provided
@@ -769,6 +771,7 @@ export const LoadControlModule: React.FC<Props> = ({
         usbaId: editReport.usbaId || userInfo.usbaId,
         stationName: reportStn,
       };
+      setReportOfficerUser(reportUser);
 
       if (initialViewMode === 'dual-report') {
         const depMsg = buildDepartureMessage(loadedLdm, reportUser);
@@ -1327,6 +1330,7 @@ export const LoadControlModule: React.FC<Props> = ({
     const ldmText = generateLdmForDestination(formData, userInfo);
     const mvtText = buildMvtMessage(formData, userInfo);
 
+    setReportOfficerUser(userInfo);
     setDepartureMessageHtml(departureMsg);
     setLdmReportText(ldmText);
     setMvtMessageText(mvtText);
@@ -1475,6 +1479,7 @@ export const LoadControlModule: React.FC<Props> = ({
       date: new Date().toISOString().split('T')[0],
     });
     setEditingReportInfo(null);
+    setReportOfficerUser(null);
     onClearEditReport?.();
     setViewMode('input');
     showToast('NEW FORM READY');
@@ -1614,7 +1619,7 @@ export const LoadControlModule: React.FC<Props> = ({
               </p>
               <p className="text-xs text-cyan-300/80 font-mono mt-0.5 uppercase tracking-wide">
                 FLIGHT: <strong className="text-amber-300">BS-{formData.flightNoSuffix}</strong> ({formData.route}) &bull; DATE: {formData.date} &bull; OFFICER:{' '}
-                {userInfo.userName} &bull; STATION: {userInfo.stationName}
+                {activeOfficerUser.userName} &bull; STATION: {activeOfficerUser.stationName}
               </p>
             </div>
 
@@ -1756,7 +1761,7 @@ export const LoadControlModule: React.FC<Props> = ({
                   <div className="overflow-x-auto bg-slate-950/60 p-2 rounded-xl print:bg-white print:p-0 print:overflow-visible print:rounded-none">
                     <DepartureReportTable
                       data={flightFormDataForOfficialTables}
-                      user={userInfo}
+                      user={activeOfficerUser}
                       mode="dom"
                     />
                   </div>
@@ -1788,7 +1793,7 @@ export const LoadControlModule: React.FC<Props> = ({
                   <div className="overflow-x-auto bg-slate-950/60 p-2 rounded-xl print:bg-white print:p-0 print:overflow-visible print:rounded-none">
                     <ArrivalReportTable
                       data={flightFormDataForOfficialTables}
-                      user={userInfo}
+                      user={activeOfficerUser}
                       mode="dom"
                     />
                   </div>
