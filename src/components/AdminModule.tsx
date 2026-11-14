@@ -369,19 +369,36 @@ export const AdminModule: React.FC<Props> = ({
       showToast('PLEASE TYPE A NOTICE MESSAGE FIRST!');
       return;
     }
-    await circulateAdminNotice(noticeInput.trim(), true, userInfo.userName || 'SUPER ADMIN');
+    const textToCirculate = noticeInput.trim();
+    const savedToCloud = await circulateAdminNotice(
+      textToCirculate,
+      true,
+      userInfo.userName || 'SUPER ADMIN'
+    );
     await logUserActivity(
       'NOTICE CIRCULATED',
-      `Circulated Notice: "${noticeInput.trim().toUpperCase()}"`,
+      `Circulated Notice: "${textToCirculate.toUpperCase()}"`,
       userInfo
     );
     setNoticeInput('');
-    showToast('ADMIN NOTICE CIRCULATED TO ALL USERS LIVE!');
+    if (savedToCloud) {
+      showToast('ADMIN NOTICE CIRCULATED TO ALL USERS LIVE!');
+    } else {
+      showToast('NOTICE SAVED LOCALLY ONLY — CLOUD SYNC FAILED (QUOTA/NETWORK)!');
+    }
   };
 
   const handleClearNotice = async () => {
-    await circulateAdminNotice('', false, userInfo.userName || 'SUPER ADMIN');
-    showToast('ACTIVE ADMIN NOTICE CLEARED!');
+    const clearedInCloud = await circulateAdminNotice(
+      '',
+      false,
+      userInfo.userName || 'SUPER ADMIN'
+    );
+    if (clearedInCloud) {
+      showToast('ACTIVE ADMIN NOTICE CLEARED!');
+    } else {
+      showToast('NOTICE CLEARED LOCALLY ONLY — CLOUD SYNC FAILED (QUOTA/NETWORK)!');
+    }
   };
 
   // ================= 1. ADMIN PASSWORD LOGIN PAGE =================

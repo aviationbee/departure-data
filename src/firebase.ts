@@ -645,7 +645,7 @@ export async function circulateAdminNotice(
   message: string,
   active: boolean,
   createdBy = 'SUPER ADMIN'
-): Promise<void> {
+): Promise<boolean> {
   const now = Date.now();
   const createdAt = new Date(now).toISOString();
   const noticePayload: SystemNoticeDoc = {
@@ -666,8 +666,14 @@ export async function circulateAdminNotice(
       timestamp: now,
       createdBy: noticePayload.createdBy,
     });
-  } catch (err) {
+    clearQuotaExceeded();
+    return true;
+  } catch (err: any) {
     console.warn('Firestore circulateAdminNotice warning:', err);
+    if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+      notifyQuotaExceeded();
+    }
+    return false;
   }
 }
 
@@ -1186,7 +1192,40 @@ function getCachedSystemNotice(): SystemNoticeDoc | null {
   }
 }
 
+let systemNoticeSnapshotUnsub: (() => void) | null = null;
+
+function ensureSystemNoticeSnapshotListener(): void {
+  if (systemNoticeSnapshotUnsub) return;
+  try {
+    systemNoticeSnapshotUnsub = onSnapshot(
+      doc(db, 'system_notices', 'current_notice'),
+      (docSnap) => {
+        clearQuotaExceeded();
+        const notice = docSnap.exists()
+          ? ({ id: docSnap.id, ...(docSnap.data() as Omit<SystemNoticeDoc, 'id'>) } as SystemNoticeDoc)
+          : null;
+        setSafeStorageItem(CACHED_SYSTEM_NOTICE_KEY, JSON.stringify(notice));
+        setSafeStorageItem(NOTICE_LAST_CHECK_TS_KEY, String(Date.now()));
+        systemNoticeSubscribers.forEach((cb) => cb(notice));
+      },
+      (err: any) => {
+        console.warn('Real-time system_notices onSnapshot warning:', err);
+        systemNoticeSnapshotUnsub = null;
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota exceeded')) {
+          notifyQuotaExceeded();
+        }
+      }
+    );
+  } catch (e) {
+    console.warn('Failed to attach system_notices onSnapshot:', e);
+    systemNoticeSnapshotUnsub = null;
+  }
+}
+
 export async function refreshSystemNoticeFromCloud(force = true): Promise<SystemNoticeDoc | null> {
+  if (!force && systemNoticeSnapshotUnsub) {
+    return getCachedSystemNotice();
+  }
   const now = Date.now();
   const lastCheckTs = Number(getSafeStorageItem(NOTICE_LAST_CHECK_TS_KEY) || '0');
   if (!force && lastCheckTs > 0 && now - lastCheckTs < NOTICE_CHECK_COOLDOWN_MS) {
@@ -1201,6 +1240,9 @@ export async function refreshSystemNoticeFromCloud(force = true): Promise<System
     setSafeStorageItem(CACHED_SYSTEM_NOTICE_KEY, JSON.stringify(notice));
     setSafeStorageItem(NOTICE_LAST_CHECK_TS_KEY, String(Date.now()));
     systemNoticeSubscribers.forEach((cb) => cb(notice));
+    if (systemNoticeSubscribers.size > 0 && !systemNoticeSnapshotUnsub) {
+      ensureSystemNoticeSnapshotListener();
+    }
     return notice;
   } catch (err: any) {
     console.warn('Warning refreshing system_notices:', err);
@@ -1211,15 +1253,19 @@ export async function refreshSystemNoticeFromCloud(force = true): Promise<System
   }
 }
 
-// Zero-background-connection System Notice check (15-min cooldown + SYNC/REFRESH; 0 idle listeners)
+// Live 1-document real-time listener exclusively for Super Admin Notice popups (~1 read/login + ~1 read/notice)
 export function subscribeToSystemNotice(
   callback: (notice: SystemNoticeDoc | null) => void
 ) {
   systemNoticeSubscribers.add(callback);
   callback(getCachedSystemNotice());
-  refreshSystemNoticeFromCloud(false).catch(() => {});
+  ensureSystemNoticeSnapshotListener();
 
   return () => {
     systemNoticeSubscribers.delete(callback);
+    if (systemNoticeSubscribers.size === 0 && systemNoticeSnapshotUnsub) {
+      systemNoticeSnapshotUnsub();
+      systemNoticeSnapshotUnsub = null;
+    }
   };
 }
